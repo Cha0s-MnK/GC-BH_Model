@@ -1,45 +1,60 @@
 #!/usr/bin/env python3
 # Licensed under BSD-3-Clause License - see LICENSE
 
-"""
-Reproduce the active Gao+2023 figure subset from local Gao+2023 outputs.
-
-This module is intentionally pragmatic: it builds the maintained 10-figure
-reproduction subset from local Gao+2023 catalog outputs and the local MPB
-table generated in the Gao+2023 workflow.
-"""
+"""Reproduce the maintained Gao+2024 figure subset from one modern run."""
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import json
 import matplotlib as mpl
+mpl.use("Agg")
 import matplotlib.pyplot as plt
-plt.rcParams.update({"font.family": "Times New Roman",
-                     "font.size": 10,
-                     "mathtext.default": "regular",
-                     "xtick.direction": "in",
-                     "ytick.direction": "in",
-                     "text.usetex": True,
-                     "text.latex.preamble": r"\usepackage{amsmath} \usepackage{bm}"})
 import numpy as np
 import pandas as pd
 from pathlib import Path
-import re
-import shutil
 import sys
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Tuple
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
+PLOT_DIR = PROJECT_ROOT / "plot"
+for import_dir in [PLOT_DIR, SRC_DIR]:
+    if str(import_dir) not in sys.path:
+        sys.path.insert(0, str(import_dir))
 
-from config import STD_DPI  # noqa: E402
-from plot_common import plot_dir as default_plot_dir  # noqa: E402
+from config import STD_DPI, parse_exact_int64  # noqa: E402
+from evo import (  # noqa: E402
+    STAT_ALIVE,
+    STAT_DISRUPT,
+    STAT_SUNK_BH,
+    STAT_SUNK_GC,
+    STAT_WANDER,
+)
+from load_output import (  # noqa: E402
+    DepositProfile,
+    OutputPaths,
+    load_allcat,
+    load_deposit_profile,
+    load_final_gcs,
+    load_halo_summary,
+    load_halo_summary_by_z,
+    load_mpb,
+    load_run_metadata,
+    output_paths,
+)
+from plot_common import (  # noqa: E402
+    apply_style,
+    finish_axis,
+    finish_log_axis,
+    plot_dir as default_plot_dir,
+    save_pdf,
+    use_agg_backend,
+)
 
-"""Local MW/M31 NSC+SMBH constants for Gao+2023 plotting."""
+use_agg_backend()
+
+"""Local MW/M31 NSC+SMBH constants for Gao+2024 plotting."""
 
 M_SMBH_MW = 4.297e6
 M_SMBH_MW_err = 0.012e6
@@ -57,46 +72,36 @@ M_NSC_M31_err = 0.0
 R_NSC_M31 = 8.0
 R_NSC_M31_err = 4.0
 
-ALLCAT_COLUMNS = [
-    "hid_z0",
-    "logMh_z0",
-    "logMstar_z0",
-    "logMh_form",
-    "logMstar_form",
-    "logM_form",
-    "zform",
-    "feh",
-    "isMPB",
-    "subfind_form",
-    "snap_form",
-]
-ALLCAT_OPTIONAL_RADIUS_COLUMN = "r_galaxy_kpc"
 RUN_METADATA_NAME = "run_metadata.json"
-LEGACY_DEFAULT_NS_VALUES = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0)
 
 
 @dataclass
 class ModelResult:
-    """Container for one Ns model track."""
+    """Container for one modern output model track."""
 
     ns_value: float
     r_init: np.ndarray
     r_final: np.ndarray
     m_final: np.ndarray
     status: np.ndarray
-    deposit_profile: "DepositProfile | None" = None
-    halo_summary: pd.DataFrame | None = None
+    deposit_profile: DepositProfile
+    halo_summary: pd.DataFrame
 
 
 @dataclass
-class DepositProfile:
-    """Final deposited shell masses for one Ns model across all halos."""
+class GaoOutput:
+    """Validated modern Gao input tables and the aligned model arrays."""
 
-    halo_ids: np.ndarray
-    r_inner_kpc: List[np.ndarray]
-    r_outer_kpc: List[np.ndarray]
-    shell_mass_msun: List[np.ndarray]
-    cumulative_mass_msun: List[np.ndarray] | None = None
+    formed: pd.DataFrame
+    final_gcs: pd.DataFrame
+    halo_summary: pd.DataFrame
+    halo_summary_by_z: pd.DataFrame
+    mpb: pd.DataFrame
+    deposit_profile: DepositProfile
+    metadata: Dict[str, object]
+    paths: OutputPaths
+    final_redshift: float
+    model: ModelResult
 
 
 @dataclass(frozen=True)
@@ -127,34 +132,6 @@ def _log10_positive_or_nan(arr: np.ndarray) -> np.ndarray:
     mask = np.isfinite(arr) & (arr > 0)
     out[mask] = np.log10(arr[mask])
     return out
-
-
-def _apply_plot_settings_from_data() -> None:
-    """Apply the local Gao+2023 plotting style.
-
-    The suggestion file requests TeX rendering. To keep this script runnable
-    on systems without a local LaTeX installation, we only enable TeX when a
-    ``latex`` binary is available.
-    """
-
-    plt.style.use("default")
-    plt.rcParams.update(
-        {
-            "font.family": "Times New Roman",
-            "mathtext.default": "regular",
-            "xtick.direction": "in",
-            "ytick.direction": "in",
-        }
-    )
-    if shutil.which("latex") is not None:
-        plt.rcParams.update(
-            {
-                "text.usetex": True,
-                "text.latex.preamble": r"\usepackage{amsmath} \usepackage{bm}",
-            }
-        )
-    else:
-        plt.rcParams.update({"text.usetex": False})
 
 
 def _get_mw_m31_observations() -> Tuple[GalaxyObs, GalaxyObs]:
@@ -220,10 +197,10 @@ def _add_nsc_smbh_points_pc(ax: plt.Axes, obs: GalaxyObs, show_labels: bool = Tr
 
 
 def _gao_observational_overlays() -> Dict[str, object]:
-    """Return observational anchors used in Gao+2023 figure overlays.
+    """Return observational anchors used in Gao+2024 figure overlays.
 
     The points/curves below are compact digitized approximations from the
-    original Gao+2023 figures and references listed in their captions.
+    original Gao+2024 figures and references listed in their captions.
     They are intentionally lightweight and self-contained so reproduction
     works without external catalog files.
     """
@@ -236,7 +213,7 @@ def _gao_observational_overlays() -> Dict[str, object]:
         "H17": 4.0e-5,
     }
 
-    # Fig. 3 / 7: digitized directly from Gao+2023 Fig. 3.
+    # Fig. 3 / 7: digitized directly from Gao+2024 Fig. 3.
     fig3_G14 = {
         "r_kpc": np.array([
             0.010794385163805828,
@@ -471,92 +448,25 @@ def _gao_observational_overlays() -> Dict[str, object]:
 
 
 def read_allcat(allcat_path: Path) -> pd.DataFrame:
-    """Load and standardize one allcat table."""
+    """Load one modern allcat table through the shared header-aware reader."""
 
-    raw = pd.read_csv(
-        allcat_path,
-        sep=r"\s+",
-        comment="#",
-        header=None,
-        engine="python",
-    )
-    if raw.shape[1] < len(ALLCAT_COLUMNS):
-        raise ValueError(
-            f"Allcat file has {raw.shape[1]} columns; expected at least {len(ALLCAT_COLUMNS)}."
-        )
-
-    # Keep the canonical columns used by the plotting workflow. Newer outputs
-    # may append extra formation-time diagnostics after these.
-    # Keep the canonical 11 columns plus optional radius column when present.
-    n_keep = min(raw.shape[1], len(ALLCAT_COLUMNS) + 1)
-    raw = raw.iloc[:, :n_keep].copy()
-    cols = list(ALLCAT_COLUMNS)
-    if n_keep > len(ALLCAT_COLUMNS):
-        cols.append(ALLCAT_OPTIONAL_RADIUS_COLUMN)
-    raw.columns = cols
-
-    for col in ALLCAT_COLUMNS:
-        raw[col] = pd.to_numeric(raw[col], errors="coerce")
-    if ALLCAT_OPTIONAL_RADIUS_COLUMN in raw.columns:
-        raw[ALLCAT_OPTIONAL_RADIUS_COLUMN] = pd.to_numeric(
-            raw[ALLCAT_OPTIONAL_RADIUS_COLUMN], errors="coerce"
-        )
-
-    gc = raw.dropna(subset=ALLCAT_COLUMNS).copy()
-    if ALLCAT_OPTIONAL_RADIUS_COLUMN not in gc.columns:
-        gc[ALLCAT_OPTIONAL_RADIUS_COLUMN] = np.nan
-
-    gc["hid_z0"] = gc["hid_z0"].astype(int)
-    gc["subfind_form"] = gc["subfind_form"].astype(int)
-    gc["snap_form"] = gc["snap_form"].astype(int)
-    gc["isMPB"] = gc["isMPB"].astype(int)
-    gc["M_form"] = np.power(10.0, gc["logM_form"].to_numpy())
-    gc["M_halo_z0"] = np.power(10.0, gc["logMh_z0"].to_numpy())
-    gc["M_halo_form"] = np.power(10.0, gc["logMh_form"].to_numpy())
-    return gc
+    return load_allcat(Path(allcat_path))
 
 
 def read_mpb(mpb_path: Path) -> pd.DataFrame:
-    """Load MPB table (full or topology schema) and add helper columns."""
+    """Load one modern MPB table through the shared reader."""
 
-    mpb = pd.read_csv(mpb_path)
-    for col in ["subhalo_id_z0", "SnapNum"]:
-        if col not in mpb.columns:
-            raise ValueError(f"MPB table is missing required column '{col}': {mpb_path}")
-    mpb["subhalo_id_z0"] = pd.to_numeric(mpb["subhalo_id_z0"], errors="coerce").astype(int)
-    mpb["SnapNum"] = pd.to_numeric(mpb["SnapNum"], errors="coerce").astype(int)
-
-    # Support both full MPB timeseries and compact topology tables.
-    if {"SubhaloSpin_x", "SubhaloSpin_y", "SubhaloSpin_z"}.issubset(mpb.columns):
-        mpb["spin_mag"] = np.sqrt(
-            np.square(pd.to_numeric(mpb["SubhaloSpin_x"], errors="coerce"))
-            + np.square(pd.to_numeric(mpb["SubhaloSpin_y"], errors="coerce"))
-            + np.square(pd.to_numeric(mpb["SubhaloSpin_z"], errors="coerce"))
-        )
-        mpb["spin_mag"] = np.where(np.isfinite(mpb["spin_mag"]), mpb["spin_mag"], 500.0)
-    else:
-        # Topology table omits spin vectors; use a neutral default.
-        mpb["spin_mag"] = 500.0
-
-    if "SubhaloMass" in mpb.columns:
-        mpb["SubhaloMass"] = pd.to_numeric(mpb["SubhaloMass"], errors="coerce")
-    if "logMh_msun_h" in mpb.columns:
-        mpb["logMh_msun_h"] = pd.to_numeric(mpb["logMh_msun_h"], errors="coerce")
-    if "Redshift" in mpb.columns:
-        mpb["Redshift"] = pd.to_numeric(mpb["Redshift"], errors="coerce")
-    return mpb
+    return load_mpb(Path(mpb_path))
 
 
 def read_inputs(allcat_path: Path, mpb_path: Path) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """Load and standardize GC catalog and MPB tables."""
+    """Load and standardise the modern formation and MPB tables."""
 
-    gc = read_allcat(allcat_path)
-    mpb = read_mpb(mpb_path)
-    return gc, mpb
+    return read_allcat(allcat_path), read_mpb(mpb_path)
 
 
 def build_snap_to_z_map(gc: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
-    """Build a snap->redshift interpolation from formed GC rows."""
+    """Build a snapshot-to-redshift interpolation from formed GC rows."""
 
     snap_z = gc.groupby("snap_form")["zform"].median().sort_index()
     snap_arr = snap_z.index.to_numpy(dtype=float)
@@ -565,7 +475,7 @@ def build_snap_to_z_map(gc: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
 
 
 def estimate_zhm(gc: pd.DataFrame, mpb: pd.DataFrame, *, final_redshift: float = 0.0) -> pd.DataFrame:
-    """Estimate z_hm for each target halo from MPB and snap->z interpolation."""
+    """Estimate the half-mass assembly redshift for each target halo."""
 
     snap_arr, z_arr = build_snap_to_z_map(gc)
     rows: List[dict] = []
@@ -584,14 +494,14 @@ def estimate_zhm(gc: pd.DataFrame, mpb: pd.DataFrame, *, final_redshift: float =
             )
 
         if "SubhaloMass" in g.columns:
-            mass_msun_h = pd.to_numeric(g["SubhaloMass"], errors="coerce").to_numpy(dtype=float) * 1e10
+            mass_msun_h = pd.to_numeric(g["SubhaloMass"], errors="coerce").to_numpy(dtype=float) * 1.0e10
         elif "logMh_msun_h" in g.columns:
             logm = pd.to_numeric(g["logMh_msun_h"], errors="coerce").to_numpy(dtype=float)
             mass_msun_h = np.power(10.0, logm)
         else:
             raise ValueError("MPB table must provide either 'SubhaloMass' or 'logMh_msun_h'.")
 
-        valid = np.isfinite(mass_msun_h) & (mass_msun_h > 0) & np.isfinite(z_hist)
+        valid = np.isfinite(mass_msun_h) & (mass_msun_h > 0.0) & np.isfinite(z_hist)
         if np.any(valid):
             valid_idx = np.where(valid)[0]
             usable_final = valid_idx[z_hist[valid_idx] >= (final_redshift - 1.0e-10)]
@@ -601,8 +511,6 @@ def estimate_zhm(gc: pd.DataFrame, mpb: pd.DataFrame, *, final_redshift: float =
                 idx_final = int(valid_idx[-1])
             m0 = float(mass_msun_h[idx_final])
             half = 0.5 * m0
-            # Restrict the assembly history to the portion that has already
-            # happened by `final_redshift`.
             hist_idx = valid_idx[valid_idx >= idx_final]
             crossed = hist_idx[mass_msun_h[hist_idx] <= half]
             hm_idx = int(crossed[0]) if len(crossed) > 0 else int(hist_idx[-1])
@@ -610,8 +518,7 @@ def estimate_zhm(gc: pd.DataFrame, mpb: pd.DataFrame, *, final_redshift: float =
             m_hm = float(mass_msun_h[hm_idx])
             m_halo_z0_mpb = m0
         else:
-            # Rare fallback for rows with missing MPB mass history.
-            sel_gc = gc["hid_z0"].to_numpy() == int(hid)
+            sel_gc = gc["hid_z0"].to_numpy(dtype=int) == int(hid)
             if np.any(sel_gc):
                 m_halo_z0_mpb = float(np.power(10.0, gc.loc[sel_gc, "logMh_z0"].iloc[0]))
             else:
@@ -648,11 +555,7 @@ def estimate_zhm(gc: pd.DataFrame, mpb: pd.DataFrame, *, final_redshift: float =
 
 
 def lookback_time_gyr(z: np.ndarray) -> np.ndarray:
-    """Approximate lookback time in Gyr.
-
-    Uses Astropy when available; otherwise falls back to a smooth analytic
-    approximation that is accurate enough for the plotting workflow here.
-    """
+    """Approximate lookback time in Gyr."""
 
     z = np.asarray(z, dtype=float)
     try:
@@ -663,336 +566,209 @@ def lookback_time_gyr(z: np.ndarray) -> np.ndarray:
         return 13.8 * (1.0 - 1.0 / np.sqrt(1.0 + np.clip(z, 0.0, None)))
 
 
-def _ns_tag(ns_value: float) -> str:
-    """Convert N_s value into filename tag, e.g. 0.5 -> '0p5'."""
+def _integer_values(values: object, name: str) -> np.ndarray:
+    """Parse identifiers as exact signed int64 values without a float round trip."""
 
-    return f"{float(ns_value):.1f}".replace(".", "p")
-
-
-def _model_output_root_from_allcat_path(allcat_path: Path) -> Path:
-    """Infer the Gao output root from either a root template or an ns subdir file."""
-
-    parent = allcat_path.parent
-    if re.fullmatch(r"ns[0-9]+p[0-9]+", parent.name):
-        return parent.parent
-    return parent
+    raw = np.asarray(values, dtype=object).reshape(-1)
+    parsed = [parse_exact_int64(value, name=f"{name}[{index}]") for index, value in enumerate(raw)]
+    return np.asarray(parsed, dtype=np.int64)
 
 
-def _resolve_model_inputs_from_out_dir(out_dir: Path) -> Tuple[Path, Path]:
-    """Resolve the root allcat template and MPB table from one run output directory."""
+def _validate_identifier_set(actual: object, expected: set[int], name: str) -> None:
+    """Require an output identifier set to match the formed catalogue."""
 
-    model_root = out_dir.resolve()
-    if not model_root.exists():
-        raise FileNotFoundError(f"Model output directory does not exist: {model_root}")
-    if not model_root.is_dir():
-        raise NotADirectoryError(f"Model output path is not a directory: {model_root}")
-
-    allcat_candidates = sorted(model_root.glob("allcat_s-*.txt"))
-    if len(allcat_candidates) == 0:
-        raise FileNotFoundError(
-            f"Missing root allcat file in {model_root}. Expected exactly one file matching allcat_s-*.txt."
-        )
-    if len(allcat_candidates) > 1:
-        names = ", ".join(path.name for path in allcat_candidates)
-        raise RuntimeError(
-            f"Found multiple root allcat files in {model_root}; expected exactly one: {names}"
-        )
-
-    mpb_path = model_root / "mpb_from_fixed_trees.csv"
-    if not mpb_path.exists():
-        raise FileNotFoundError(f"Missing MPB catalog in {model_root}: {mpb_path}")
-    return allcat_candidates[0].resolve(), mpb_path.resolve()
+    actual_set = set(_integer_values(actual, name).tolist())
+    if actual_set != expected:
+        missing = sorted(expected - actual_set)
+        extra = sorted(actual_set - expected)
+        raise ValueError(f"{name} identifier set differs from formed allcat; missing={missing[:8]}, extra={extra[:8]}.")
 
 
-def _read_run_metadata(allcat_path: Path) -> Dict[str, object]:
-    """Load run metadata emitted by `my/run.py`, if present."""
+def load_modern_output(out_dir: Path, final_redshift: float | None = None) -> GaoOutput:
+    """Load and validate one flat modern output directory."""
 
-    path = _model_output_root_from_allcat_path(allcat_path) / RUN_METADATA_NAME
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8") as fh:
-        return json.load(fh)
+    paths = output_paths(Path(out_dir))
+    metadata = load_run_metadata(paths.out_dir)
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{paths.run_metadata} must contain a JSON object.")
+    if "N_S" not in metadata:
+        raise ValueError(f"{RUN_METADATA_NAME} is missing required N_S: {paths.run_metadata}")
 
+    try:
+        ns_value = float(metadata["N_S"])
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{RUN_METADATA_NAME} contains a non-numeric N_S.") from exc
+    if not np.isfinite(ns_value) or ns_value <= 0.0:
+        raise ValueError(f"{RUN_METADATA_NAME} N_S must be finite and positive; got {metadata['N_S']!r}.")
 
-def _build_ns_allcat_path(allcat_template_path: Path, ns_value: float) -> Path:
-    """Build allcat path for one N_s from a template/root allcat filename."""
-
-    model_output_root = _model_output_root_from_allcat_path(allcat_template_path)
-    name = allcat_template_path.name
-    m = re.match(r"^(?P<prefix>.+?)(?P<suffix>_s-.*\.txt)$", name)
-    if m is None:
+    metadata_final_redshift = metadata.get("final_redshift", 0.0)
+    try:
+        metadata_final_redshift = float(metadata_final_redshift)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{RUN_METADATA_NAME} final_redshift must be numeric.") from exc
+    if not np.isfinite(metadata_final_redshift) or metadata_final_redshift < 0.0:
         raise ValueError(
-            "Cannot infer N_s allcat filenames from template. "
-            f"Expected name like 'allcat_s-...txt' or 'allcat_nsXpY_s-...txt', got: {name}"
+            f"{RUN_METADATA_NAME} final_redshift must be finite and non-negative; "
+            f"got {metadata.get('final_redshift')!r}."
         )
+    if final_redshift is None:
+        final_redshift = metadata_final_redshift
+    try:
+        final_redshift = float(final_redshift)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("final redshift override must be numeric.") from exc
+    if not np.isfinite(final_redshift) or final_redshift < 0.0:
+        raise ValueError(f"final redshift override must be finite and non-negative; got {final_redshift!r}.")
 
-    prefix = re.sub(r"_ns[0-9p]+$", "", m.group("prefix"))
-    suffix = m.group("suffix")
-    ns_tag = _ns_tag(ns_value)
-    return model_output_root / f"ns{ns_tag}" / f"{prefix}_ns{ns_tag}{suffix}"
+    formed = load_allcat(paths.root_allcat)
+    if formed.empty:
+        raise ValueError(f"Formation catalogue is empty: {paths.root_allcat}")
+    required_formed_columns = [
+        "halo_id_z0",
+        "log10_halo_mass_z0",
+        "log10_halo_mass_form",
+        "log10_stellar_mass_form",
+        "log10_gc_mass_init",
+        "redshift_form",
+        "metallicity_feh",
+        "is_mpb",
+        "subhalo_id_form",
+        "snapshot_form",
+        "galaxy_radius_form_kpc",
+        "gc_radius_form_pc",
+        "gc_surface_density_msun_pc2",
+        "imbh_mass_init_msun",
+    ]
+    missing_formed_columns = [column for column in required_formed_columns if column not in formed.columns]
+    if missing_formed_columns:
+        raise ValueError(f"{paths.root_allcat} is missing modern allcat columns: {missing_formed_columns}")
+    for column in [
+        "log10_halo_mass_z0",
+        "log10_halo_mass_form",
+        "log10_stellar_mass_form",
+        "log10_gc_mass_init",
+        "redshift_form",
+        "metallicity_feh",
+        "galaxy_radius_form_kpc",
+        "gc_radius_form_pc",
+        "gc_surface_density_msun_pc2",
+        "imbh_mass_init_msun",
+    ]:
+        values = pd.to_numeric(formed[column], errors="coerce").to_numpy(dtype=float)
+        if np.any(~np.isfinite(values)):
+            raise ValueError(f"{paths.root_allcat} contains non-finite {column} values.")
+    if np.any(formed["redshift_form"].to_numpy(dtype=float) < 0.0):
+        raise ValueError(f"{paths.root_allcat} contains negative redshift_form values.")
+    for column in ["galaxy_radius_form_kpc", "gc_radius_form_pc", "gc_surface_density_msun_pc2"]:
+        values = formed[column].to_numpy(dtype=float)
+        if np.any(values <= 0.0):
+            raise ValueError(f"{paths.root_allcat} contains non-positive {column} values.")
+    if np.any(formed["imbh_mass_init_msun"].to_numpy(dtype=float) < 0.0):
+        raise ValueError(f"{paths.root_allcat} contains negative imbh_mass_init_msun values.")
+    formed_halo_ids = _integer_values(formed["halo_id_z0"], "allcat halo_id_z0")
+    expected_halo_ids = set(np.unique(formed_halo_ids).tolist())
 
+    final_gcs = load_final_gcs(paths.final_gcs, expected_halo_ids=formed_halo_ids)
+    required_final_columns = [
+        "radius_init_kpc",
+        "radius_final_kpc",
+        "status",
+        "gc_mass_final_msun",
+        "imbh_mass_init_msun",
+        "imbh_mass_final_msun",
+    ]
+    missing_final_columns = [column for column in required_final_columns if column not in final_gcs.columns]
+    if missing_final_columns:
+        raise ValueError(f"{paths.final_gcs} is missing modern final-GC columns: {missing_final_columns}")
+    final_halo_ids = _integer_values(final_gcs["halo_id_z0"], "finalGCs halo_id_z0")
+    if not np.array_equal(final_halo_ids, formed_halo_ids):
+        raise ValueError(f"{paths.final_gcs} does not align with the root allcat row order.")
+    _validate_identifier_set(final_gcs["halo_id_z0"], expected_halo_ids, "finalGCs")
 
-def _resolve_reference_allcat_path(
-    allcat_template_path: Path,
-    ns_values: Sequence[float],
-    *,
-    input_mode: str = "out_dir",
-) -> Path:
-    """Pick one existing allcat path used as reference row ordering."""
+    halo_summary = load_halo_summary(paths.halo_summary)
+    required_summary_columns = ["hid_z0", "M_IMBH_final_tot", "M_SMBH_final", "M_NSC", "n_sunk"]
+    missing_summary_columns = [column for column in required_summary_columns if column not in halo_summary.columns]
+    if missing_summary_columns:
+        raise ValueError(f"{paths.halo_summary} is missing modern halo-summary columns: {missing_summary_columns}")
+    _validate_identifier_set(halo_summary["hid_z0"], expected_halo_ids, "haloSummary")
+    if halo_summary["hid_z0"].duplicated().any():
+        raise ValueError(f"{paths.halo_summary} must contain one row per halo_id_z0.")
+    for column in ["M_IMBH_final_tot", "M_SMBH_final", "M_NSC"]:
+        values = pd.to_numeric(halo_summary[column], errors="coerce").to_numpy(dtype=float)
+        if np.any(~np.isfinite(values)) or np.any(values < 0.0):
+            raise ValueError(f"{paths.halo_summary} contains invalid {column} values.")
 
-    candidates = [allcat_template_path]
-    for ns in ns_values:
-        try:
-            candidates.append(_build_ns_allcat_path(allcat_template_path, float(ns)))
-        except ValueError:
-            continue
-    for path in candidates:
-        if path.exists():
-            return path
-    raise FileNotFoundError(
-        f"Cannot find any allcat file for plotting in {input_mode} mode. Checked:\n- "
-        + "\n- ".join(str(p) for p in candidates)
+    halo_summary_by_z = load_halo_summary_by_z(paths.halo_summary_by_z)
+    _validate_identifier_set(halo_summary_by_z["halo_id_z0"], expected_halo_ids, "haloSummaryByZ")
+    for column in ["nsc_mass_msun", "central_bh_mass_final_msun"]:
+        values = pd.to_numeric(halo_summary_by_z[column], errors="coerce").to_numpy(dtype=float)
+        finite = np.isfinite(values)
+        if np.any(values[finite] < 0.0):
+            raise ValueError(f"{paths.halo_summary_by_z} contains negative {column} values.")
+
+    mpb = load_mpb(paths.mpb)
+    mpb_halo_ids = _integer_values(mpb["subhalo_id_z0"], "MPB subhalo_id_z0")
+    if not expected_halo_ids.issubset(set(mpb_halo_ids.tolist())):
+        missing_mpb_ids = sorted(expected_halo_ids - set(mpb_halo_ids.tolist()))
+        raise ValueError(f"{paths.mpb} is missing MPB histories for halo IDs: {missing_mpb_ids[:8]}")
+
+    radius_init = pd.to_numeric(final_gcs["radius_init_kpc"], errors="coerce").to_numpy(dtype=float)
+    if np.any(~np.isfinite(radius_init)) or np.any(radius_init <= 0.0):
+        raise ValueError(f"{paths.final_gcs} contains invalid radius_init_kpc values.")
+    radius_final_raw = pd.to_numeric(final_gcs["radius_final_kpc"], errors="coerce").to_numpy(dtype=float)
+    status = _integer_values(final_gcs["status"], "finalGCs status")
+    valid_status = {STAT_ALIVE, STAT_DISRUPT, STAT_SUNK_GC, STAT_SUNK_BH, STAT_WANDER}
+    invalid_status = sorted(set(status.tolist()).difference(valid_status))
+    if invalid_status:
+        raise ValueError(f"{paths.final_gcs} contains invalid status codes: {invalid_status}")
+    radius_final = np.where(np.isfinite(radius_final_raw) & (radius_final_raw > 0.0), radius_final_raw, np.nan)
+    survivor = status == STAT_ALIVE
+    if np.any(survivor & ~np.isfinite(radius_final)):
+        raise ValueError(f"{paths.final_gcs} contains invalid radius_final_kpc values for surviving GCs.")
+    for column in ["imbh_mass_init_msun", "imbh_mass_final_msun"]:
+        values = pd.to_numeric(final_gcs[column], errors="coerce").to_numpy(dtype=float)
+        if np.any(~np.isfinite(values)) or np.any(values < 0.0):
+            raise ValueError(f"{paths.final_gcs} contains invalid {column} values.")
+
+    deposit_profile = load_deposit_profile(paths.deposit)
+    deposit_halo_ids = _integer_values(deposit_profile.halo_ids, "depos halo_id_z0")
+    _validate_identifier_set(deposit_halo_ids, expected_halo_ids, "depos")
+    if deposit_profile.cumulative_mass_msun is None:
+        raise ValueError(f"{paths.deposit} did not provide cumulative deposited profiles.")
+    for hid, radii, shell in zip(
+        deposit_halo_ids,
+        deposit_profile.r_outer_kpc,
+        deposit_profile.shell_mass_msun,
+    ):
+        radii = np.asarray(radii, dtype=float)
+        shell = np.asarray(shell, dtype=float)
+        if len(radii) == 0 or len(radii) != len(shell):
+            raise ValueError(f"{paths.deposit} has an invalid radial profile for halo_id_z0={int(hid)}.")
+        if np.any(~np.isfinite(radii)) or np.any(~np.isfinite(shell)) or np.any(radii <= 0.0) or np.any(shell < 0.0):
+            raise ValueError(f"{paths.deposit} has invalid radial or deposited-mass values for halo_id_z0={int(hid)}.")
+        if np.any(np.diff(radii) <= 0.0):
+            raise ValueError(f"{paths.deposit} has non-increasing r_outer_kpc for halo_id_z0={int(hid)}.")
+    model = ModelResult(
+        ns_value=ns_value,
+        r_init=radius_init,
+        r_final=radius_final,
+        m_final=final_gcs["gc_mass_final_msun"].to_numpy(dtype=float),
+        status=status,
+        deposit_profile=deposit_profile,
+        halo_summary=halo_summary,
     )
-
-
-def _find_final_gcs_file(allcat_ns_path: Path) -> Path:
-    """Return the published merged final-GC file for one `N_s`."""
-
-    m = re.search(r"_ns([0-9]+p[0-9]+)", allcat_ns_path.stem)
-    if m is None:
-        raise ValueError(f"Could not infer N_s tag from {allcat_ns_path.name}")
-    ns_tag = m.group(1)
-    path = allcat_ns_path.parent / f"finalGCs_ns{ns_tag}.dat"
-    if not path.exists():
-        raise FileNotFoundError(f"Missing finalGCs file for {allcat_ns_path.name}: {path}")
-    return path
-
-
-def _find_halo_summary_file(allcat_ns_path: Path) -> Path | None:
-    """Return the published halo-summary file for one `N_s`, if present."""
-
-    m = re.search(r"_ns([0-9]+p[0-9]+)", allcat_ns_path.stem)
-    if m is None:
-        raise ValueError(f"Could not infer N_s tag from {allcat_ns_path.name}")
-    ns_tag = m.group(1)
-    path = allcat_ns_path.parent / f"haloSummary_ns{ns_tag}.csv"
-    return path if path.exists() else None
-
-
-def _read_comment_columns(path: Path) -> List[str]:
-    """Return whitespace-delimited column names from the first header line."""
-
-    with path.open("r", encoding="utf-8") as fh:
-        for line in fh:
-            if not line.startswith("#"):
-                continue
-            text = line[1:].strip()
-            if not text:
-                continue
-            return text.split()
-    raise ValueError(f"Cannot find header columns in {path}.")
-
-
-def _read_final_gcs_table(
-    path: Path,
-    expected_len: int,
-    expected_halo_ids: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Load final GC masses/radii from the published merged finalGCs table."""
-
-    columns = _read_comment_columns(path)
-    col_index = {name: idx for idx, name in enumerate(columns)}
-    for required in ["halo_id_z0", "gc_index_halo", "status", "M_GC_final", "r_final_kpc"]:
-        if required not in col_index:
-            raise ValueError(f"Missing required column '{required}' in {path}.")
-
-    arr = np.asarray(np.loadtxt(path, ndmin=2), dtype=float)
-    if len(arr) != expected_len:
-        raise ValueError(
-            f"Length mismatch for finalGCs table: {path} has {len(arr)} rows, expected {expected_len}."
-        )
-
-    halo_ids = np.asarray(arr[:, col_index["halo_id_z0"]], dtype=int)
-    if not np.array_equal(halo_ids, np.asarray(expected_halo_ids, dtype=int)):
-        raise ValueError(
-            f"Row-order mismatch between {path} and the matching allcat_ns file "
-            "when comparing halo_id_z0."
-        )
-
-    expected_gc_index = np.empty(expected_len, dtype=int)
-    for hid in np.unique(expected_halo_ids):
-        idx = np.where(np.asarray(expected_halo_ids, dtype=int) == int(hid))[0]
-        # Within each halo the merged finalGCs table preserves the local
-        # 1-based GC numbering used by the per-halo evolution outputs.
-        expected_gc_index[idx] = np.arange(1, len(idx) + 1, dtype=int)
-    gc_index_halo = np.asarray(arr[:, col_index["gc_index_halo"]], dtype=int)
-    if not np.array_equal(gc_index_halo, expected_gc_index):
-        raise ValueError(
-            f"Row-order mismatch between {path} and the matching allcat_ns file "
-            "when comparing gc_index_halo."
-        )
-
-    status = np.asarray(arr[:, col_index["status"]], dtype=int)
-    m_final = np.asarray(arr[:, col_index["M_GC_final"]], dtype=float)
-    r_final = np.asarray(arr[:, col_index["r_final_kpc"]], dtype=float)
-    m_final = np.where(np.isfinite(m_final) & (m_final > 0), m_final, 0.0)
-    r_final = np.where(np.isfinite(r_final) & (r_final > 0), r_final, np.nan)
-    return status, m_final, r_final
-
-
-def _read_halo_summary(path: Path) -> pd.DataFrame:
-    """Load one per-N_s halo summary table."""
-
-    df = pd.read_csv(path)
-    required = ["hid_z0", "M_IMBH_final_tot", "M_SMBH_final", "M_NSC", "n_sunk"]
-    for col in required:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column '{col}' in {path}.")
-    df["hid_z0"] = pd.to_numeric(df["hid_z0"], errors="coerce").astype(int)
-    for col in df.columns:
-        if col == "hid_z0":
-            continue
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    for col in ["M_SMBH_final", "M_NSC"]:
-        vals = df[col].to_numpy(dtype=float)
-        if not np.all(np.isfinite(vals)):
-            raise ValueError(f"Column {col} contains non-finite values in {path}.")
-        if np.any(vals < 0.0):
-            raise ValueError(f"Column {col} contains negative values in {path}.")
-    return df.sort_values("hid_z0").reset_index(drop=True)
-
-
-def _find_deposit_file(allcat_ns_path: Path) -> Path | None:
-    """Return the published merged deposit file for one `N_s`."""
-
-    m = re.search(r"_ns([0-9]+p[0-9]+)", allcat_ns_path.stem)
-    if m is None:
-        return None
-    ns_tag = m.group(1)
-    path = allcat_ns_path.parent / f"depos_ns{ns_tag}.dat"
-    return path if path.exists() else None
-
-
-def _read_deposit_profile(allcat_ns_path: Path) -> DepositProfile | None:
-    """Build a deposited-profile table from the merged per-`N_s` deposit file."""
-
-    path = _find_deposit_file(allcat_ns_path)
-    if path is None:
-        return None
-
-    arr = np.asarray(np.loadtxt(path, ndmin=2), dtype=float)
-    if arr.ndim != 2 or arr.shape[1] < 8:
-        raise ValueError(f"Unexpected combined deposit-file shape in {path}: {arr.shape}")
-
-    halo_ids: List[int] = []
-    r_inner_rows: List[np.ndarray] = []
-    r_outer_rows: List[np.ndarray] = []
-    shell_rows: List[np.ndarray] = []
-    cum_rows: List[np.ndarray] = []
-
-    ordered_halos = [int(h) for h in pd.unique(arr[:, 0].astype(int))]
-    for hid in ordered_halos:
-        halo_block = arr[arr[:, 0].astype(int) == hid]
-        if len(halo_block) == 0:
-            continue
-        last_time = float(np.min(halo_block[:, 1]))
-        # Each deposit file stores one full radial profile per coarse time
-        # block. For the figure suite we want only the final z=0 profile.
-        block = halo_block[np.isclose(halo_block[:, 1], last_time)]
-        if len(block) == 0:
-            raise ValueError(f"Cannot find final-time deposit block in {path} for halo {hid}")
-        order = np.argsort(block[:, 2])
-        block = block[order]
-
-        halo_ids.append(hid)
-        r_inner_rows.append(np.asarray(block[:, 3], dtype=float))
-        r_outer_rows.append(np.asarray(block[:, 4], dtype=float))
-        shell = np.asarray(block[:, 7], dtype=float)
-        shell_rows.append(shell)
-        cum_rows.append(np.cumsum(shell))
-
-    if not halo_ids:
-        return None
-
-    return DepositProfile(
-        halo_ids=np.asarray(halo_ids, dtype=int),
-        r_inner_kpc=r_inner_rows,
-        r_outer_kpc=r_outer_rows,
-        shell_mass_msun=shell_rows,
-        cumulative_mass_msun=cum_rows,
+    return GaoOutput(
+        formed=formed,
+        final_gcs=final_gcs,
+        halo_summary=halo_summary,
+        halo_summary_by_z=halo_summary_by_z,
+        mpb=mpb,
+        deposit_profile=deposit_profile,
+        metadata=metadata,
+        paths=paths,
+        final_redshift=final_redshift,
+        model=model,
     )
-
-
-def _assert_same_row_order(gc_ref: pd.DataFrame, gc_ns: pd.DataFrame, ns_path: Path) -> None:
-    """Ensure per-Ns catalog rows align with the reference catalog."""
-
-    if len(gc_ref) != len(gc_ns):
-        raise ValueError(
-            f"Row-count mismatch: {ns_path} has {len(gc_ns)} rows, "
-            f"reference catalog has {len(gc_ref)} rows."
-        )
-
-    key_cols = ["hid_z0", "subfind_form", "snap_form", "isMPB"]
-    for col in key_cols:
-        if not np.array_equal(gc_ref[col].to_numpy(), gc_ns[col].to_numpy()):
-            raise ValueError(
-                f"Row-order mismatch in column '{col}' for {ns_path}. "
-                "Use outputs generated from the same run setup/subhalo list."
-            )
-
-
-def simulate_models(
-    gc: pd.DataFrame,
-    allcat_template_path: Path,
-    ns_values: Sequence[float] = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0),
-    seed: int = 7,
-) -> Dict[float, ModelResult]:
-    """Load initial/final GC states for each N_s directly from simulation outputs."""
-
-    del seed  # Kept for API compatibility; no stochastic model is used here.
-
-    results: Dict[float, ModelResult] = {}
-    n_tot = len(gc)
-
-    for ns in ns_values:
-        ns_key = float(ns)
-        allcat_ns_path = _build_ns_allcat_path(allcat_template_path, ns_key)
-        if not allcat_ns_path.exists():
-            raise FileNotFoundError(f"Missing N_s allcat file: {allcat_ns_path}")
-
-        gc_ns = read_allcat(allcat_ns_path)
-        # Later figure panels compare different N_s values GC-by-GC, so the
-        # catalogs must be in identical row order before we trust those joins.
-        _assert_same_row_order(gc_ref=gc, gc_ns=gc_ns, ns_path=allcat_ns_path)
-
-        r_init = np.asarray(gc_ns[ALLCAT_OPTIONAL_RADIUS_COLUMN], dtype=float)
-        r_init = np.where(np.isfinite(r_init) & (r_init > 0), r_init, np.nan)
-
-        final_gcs_path = _find_final_gcs_file(allcat_ns_path)
-        status, m_final, r_final = _read_final_gcs_table(
-            final_gcs_path,
-            expected_len=n_tot,
-            expected_halo_ids=np.asarray(gc_ns["hid_z0"], dtype=int),
-        )
-        halo_summary_path = _find_halo_summary_file(allcat_ns_path)
-        if halo_summary_path is None:
-            raise FileNotFoundError(f"Missing haloSummary file for {allcat_ns_path.name}.")
-        halo_summary = _read_halo_summary(halo_summary_path)
-
-        deposit_profile = _read_deposit_profile(allcat_ns_path)
-
-        results[ns_key] = ModelResult(
-            ns_value=ns_key,
-            r_init=r_init,
-            r_final=r_final,
-            m_final=m_final,
-            status=status,
-            deposit_profile=deposit_profile,
-            halo_summary=halo_summary,
-        )
-
-    return results
-
 
 def _surface_density_mean_by_halo(
     halo_ids: np.ndarray,
@@ -1029,7 +805,7 @@ def _surface_density_mean_by_halo(
 def _final_survivor_mask(model: ModelResult, extra_mask: np.ndarray | None = None) -> np.ndarray:
     """Return mask selecting only surviving GCs for final-state profiles."""
 
-    mask = np.asarray(model.status, dtype=int) == 1
+    mask = np.asarray(model.status, dtype=int) == STAT_ALIVE
     if extra_mask is not None:
         mask &= np.asarray(extra_mask, dtype=bool)
     return mask
@@ -1181,7 +957,7 @@ def _select_halos_by_logmh(
 ) -> np.ndarray:
     """Select halo IDs in a mass window, with nearest-mass fallback.
 
-    Small demo subsets may not contain halos in the exact Gao+2023 mass
+    Small demo subsets may not contain halos in the exact Gao+2024 mass
     windows; when that happens, use the nearest available halo masses so
     downstream figures remain reproducible.
     """
@@ -1204,7 +980,7 @@ def _pearson_r(x: np.ndarray, y: np.ndarray) -> float:
     x = np.asarray(x, dtype=float)
     y = np.asarray(y, dtype=float)
     mask = np.isfinite(x) & np.isfinite(y)
-    if np.sum(mask) < 2:
+    if np.sum(mask) < 2 or np.ptp(x[mask]) == 0.0 or np.ptp(y[mask]) == 0.0:
         return float("nan")
     return float(np.corrcoef(x[mask], y[mask])[0, 1])
 
@@ -1232,6 +1008,9 @@ def _fit_band(
 
     xt = np.log10(x[mask]) if logx else x[mask]
     yt = np.log10(y[mask]) if logy else y[mask]
+    if np.ptp(xt) == 0.0:
+        xx = np.full(n_grid, np.nan, dtype=float)
+        return xx, np.full_like(xx, np.nan), np.full_like(xx, np.nan), np.full_like(xx, np.nan)
 
     aa, bb = np.polyfit(xt, yt, 1)
     xx_t = np.linspace(np.nanmin(xt), np.nanmax(xt), n_grid)
@@ -1256,60 +1035,6 @@ def _mean_and_std(values: np.ndarray) -> Tuple[float, float]:
     mean = float(np.mean(arr))
     std = float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0
     return mean, std
-
-
-def _build_discrete_ns_style(
-    ns_values: Sequence[float],
-) -> Tuple[np.ndarray, mpl.colors.ListedColormap, mpl.colors.BoundaryNorm, np.ndarray, Dict[float, np.ndarray]]:
-    """Return a discrete N_s colormap setup matching the paper-style bars."""
-
-    ns_levels = np.asarray([float(v) for v in ns_values], dtype=float)
-    if ns_levels.ndim != 1 or len(ns_levels) == 0:
-        raise ValueError("Need at least one N_s value to build the colorbar.")
-
-    colors = plt.cm.jet(np.linspace(0.0, 1.0, len(ns_levels)))
-    cmap = mpl.colors.ListedColormap(colors)
-    if len(ns_levels) == 1:
-        boundaries = np.array([ns_levels[0] - 0.5, ns_levels[0] + 0.5], dtype=float)
-    else:
-        mid = 0.5 * (ns_levels[:-1] + ns_levels[1:])
-        first = ns_levels[0] - 0.5 * (ns_levels[1] - ns_levels[0])
-        last = ns_levels[-1] + 0.5 * (ns_levels[-1] - ns_levels[-2])
-        boundaries = np.concatenate(([first], mid, [last]))
-    norm = mpl.colors.BoundaryNorm(boundaries, cmap.N)
-    color_lookup = {float(ns): colors[ii] for ii, ns in enumerate(ns_levels)}
-    return ns_levels, cmap, norm, boundaries, color_lookup
-
-
-def _add_discrete_ns_colorbar(
-    fig: plt.Figure,
-    ax: plt.Axes,
-    *,
-    ns_levels: np.ndarray,
-    cmap: mpl.colors.ListedColormap,
-    norm: mpl.colors.BoundaryNorm,
-    boundaries: np.ndarray,
-) -> mpl.colorbar.Colorbar:
-    """Add a discrete N_s colorbar with labels only and minimal gap."""
-
-    sm = mpl.cm.ScalarMappable(norm=norm, cmap=cmap)
-    sm.set_array([])
-    cbar = fig.colorbar(
-        sm,
-        ax=ax,
-        boundaries=boundaries,
-        ticks=ns_levels,
-        spacing="proportional",
-        drawedges=False,
-        pad=0.0,
-        fraction=0.05,
-    )
-    cbar.set_label(r"$N_{\rm S}$")
-    cbar.set_ticklabels([f"{ns:.1f}" for ns in ns_levels])
-    cbar.ax.minorticks_off()
-    cbar.ax.tick_params(length=0, width=0, pad=1.5)
-    #cbar.outline.set_linewidth(0.5) # shrink border thickness
-    return cbar
 
 
 def _halo_level_table(
@@ -1374,110 +1099,103 @@ def _halo_level_table(
 
 
 def build_reproduction(
-    allcat_path: Path,
-    mpb_path: Path,
+    gao_output: GaoOutput,
     output_dir: Path,
-    ns_values: Sequence[float] = (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0),
-    seed: int = 7,
+    *,
     include_observables: bool = True,
-    final_redshift: float | None = None,
 ) -> List[Path]:
-    """Main reproduction entry point.
+    """Write the maintained ten-figure Gao suite for one modern model run."""
 
-    Returns
-    -------
-    figure_paths:
-        Absolute output paths for the written figures.
-    """
-
+    output_dir = Path(output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
-    _apply_plot_settings_from_data()
-    ns_values = [float(v) for v in ns_values]
-    run_meta = _read_run_metadata(allcat_path)
-    if final_redshift is None:
-        final_redshift = float(run_meta.get("final_redshift", 0.0))
-    else:
-        final_redshift = float(final_redshift)
+    apply_style(font="serif", tex=True, grid=False)
 
-    allcat_ref_path = _resolve_reference_allcat_path(allcat_path, ns_values, input_mode="out_dir")
-    gc, mpb = read_inputs(allcat_path=allcat_ref_path, mpb_path=mpb_path)
-    halo_meta = estimate_zhm(gc=gc, mpb=mpb, final_redshift=final_redshift)
+    gc = gao_output.formed.copy()
+    model = gao_output.model
+    halo_ids = gc["hid_z0"].to_numpy(dtype=int)
+    expected_halo_ids = np.unique(halo_ids)
+    halo_meta = estimate_zhm(
+        gc=gc,
+        mpb=gao_output.mpb,
+        final_redshift=gao_output.final_redshift,
+    )
+    missing_halo_meta = sorted(set(expected_halo_ids.tolist()).difference(halo_meta.index.tolist()))
+    if missing_halo_meta:
+        raise ValueError(f"MPB assembly histories are missing halo IDs: {missing_halo_meta[:8]}")
+    halo_meta = halo_meta.loc[expected_halo_ids].copy()
+    z_hm_values = halo_meta["z_hm"].to_numpy(dtype=float)
+    if np.any(~np.isfinite(z_hm_values)) or np.any(z_hm_values < 0.0):
+        raise ValueError("Estimated halo assembly redshifts contain invalid values.")
     gc = gc.join(halo_meta[["z_hm"]], on="hid_z0")
+
     mw_obs, m31_obs = _get_mw_m31_observations()
     obs_overlay = _gao_observational_overlays() if include_observables else {}
-    if include_observables and final_redshift > 1.0e-12:
+    if include_observables and gao_output.final_redshift > 1.0e-12:
         print(
             "WARNING observational overlays are z=0 references while this run "
-            f"ends at final_redshift={final_redshift:g}"
+            f"ends at final_redshift={gao_output.final_redshift:g}"
         )
 
-    models = simulate_models(
-        gc=gc,
-        allcat_template_path=allcat_path,
-        ns_values=ns_values,
-        seed=seed,
-    )
-
-    # Common bins/grids used by multiple figures.
-    r_bins = np.logspace(-2.0, 2.0, 24)
-
-    q1, q2 = halo_meta["z_hm"].quantile([1 / 3, 2 / 3]).to_numpy()
-    halo_meta = halo_meta.copy()
-    # Several figure panels split halos into low/mid/high assembly bins.
+    q1, q2 = np.quantile(z_hm_values, [1 / 3, 2 / 3])
     halo_meta["zhm_bin"] = np.where(
         halo_meta["z_hm"] <= q1,
         "low",
         np.where(halo_meta["z_hm"] <= q2, "mid", "high"),
     )
-
+    zhm_style = {
+        "low": ("tab:blue", r"$z_{\rm h}<%.1f$" % q1),
+        "mid": ("tab:green", r"$z_{\rm h}\in[%.1f,%.1f]$" % (q1, q2)),
+        "high": ("tab:red", r"$z_{\rm h}>%.1f$" % q2),
+    }
+    halo_table_all = _halo_level_table(
+        gc=gc,
+        halo_meta=halo_meta,
+        model=model,
+        nsc_radius_kpc=float(mw_obs.r_nsc_pc) / 1000.0,
+    )
+    model_label = f"$N_{{\\rm S}}={model.ns_value:g}$"
+    final_mask = _final_survivor_mask(model)
+    r_bins = np.logspace(-2.0, 2.0, 24)
     written_paths: List[Path] = []
 
-    def save(fig_num: int, stem: str) -> Path:
+    def write_figure(fig_num: int, stem: str, fig: plt.Figure) -> Path:
         path = output_dir / f"Fig.{fig_num:02d}_{stem}.pdf"
-        plt.savefig(path, dpi=STD_DPI, bbox_inches="tight")
+        save_pdf(fig, path, STD_DPI)
         written_paths.append(path)
-        plt.close()
         return path
 
-    # Figure 2: final M_GC/M_halo vs Ns with median and 25--75 percentile spread.
-    x = np.linspace(0.0, 7.0, 500)
-    y = []
-    yerr_low = []
-    yerr_high = []
-    ns_values = np.array(ns_values, dtype=float)
-    for ns in ns_values:
-        halo_table = _halo_level_table(
-            gc=gc,
-            halo_meta=halo_meta,
-            model=models[float(ns)],
-        )
-        halo_ratio = (
-            halo_table["M_gc_final"].to_numpy(dtype=float)
-            / np.clip(halo_table["M_halo"].to_numpy(dtype=float), 1e-30, None)
-        )
-        y_med = float(np.median(halo_ratio))
-        q25, q75 = np.quantile(halo_ratio, [0.25, 0.75])
-        y.append(y_med / 1.0e-5)
-        yerr_low.append(max((y_med - float(q25)) / 1.0e-5, 0.0))
-        yerr_high.append(max((float(q75) - y_med) / 1.0e-5, 0.0))
-    plt.figure(constrained_layout=True, dpi=STD_DPI, figsize=(4.8, 3.6))
-    plt.errorbar(
-        ns_values,
-        y,
-        yerr=[yerr_low, yerr_high],
+    # Figure 2: final M_GC/M_halo ratio with the existing percentile range.
+    halo_ratio = (
+        halo_table_all["M_gc_final"].to_numpy(dtype=float)
+        / halo_table_all["M_halo"].to_numpy(dtype=float)
+    )
+    finite_ratio = halo_ratio[np.isfinite(halo_ratio)]
+    if len(finite_ratio) == 0:
+        raise ValueError("Cannot build Fig. 02 because no finite GC-to-halo ratios are available.")
+    ratio_median = float(np.median(finite_ratio))
+    ratio_q25, ratio_q75 = np.quantile(finite_ratio, [0.25, 0.75])
+    fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(4.8, 3.6))
+    ax.errorbar(
+        [model.ns_value],
+        [ratio_median / 1.0e-5],
+        yerr=[[
+            max((ratio_median - float(ratio_q25)) / 1.0e-5, 0.0),
+        ], [
+            max((float(ratio_q75) - ratio_median) / 1.0e-5, 0.0),
+        ]],
         marker="D",
         color="black",
         mfc="black",
         mec="black",
         capsize=4,
         lw=1.0,
-        label="High-z-SMBHs",
+        label=f"High-z-SMBHs, {model_label}",
         zorder=3,
     )
     if include_observables:
         ref_colors = {"S09": "blue", "G10": "red", "H14": "c", "H17": "green"}
         for label, ratio in obs_overlay["fig2_ratio_refs"].items():
-            plt.axhline(
+            ax.axhline(
                 ratio / 1.0e-5,
                 lw=1.0,
                 ls="--",
@@ -1485,34 +1203,31 @@ def build_reproduction(
                 color=ref_colors.get(label, "gray"),
                 label=label,
             )
-    plt.xlabel(r"$N_{\rm S}$")
-    plt.ylabel(r"$M_{\rm GC} \, / \, M_{\rm halo} \times 10^{-5}$")
-    plt.xlim(0.0, 4.5)
-    plt.ylim(1.0, 9.0)
-    plt.xticks([0, 1, 2, 3, 4])
-    plt.yticks([1, 3, 5, 7, 9])
-    plt.grid(True, alpha=0.2, linestyle=':', which='both')
-    if include_observables:
-        plt.legend(frameon=False, loc="upper left", ncol=2)
-    save(2, "mgc_mhalo_ratio")
+    x_max = max(4.5, 1.15 * model.ns_value + 0.1)
+    finish_axis(
+        ax,
+        xlabel=r"$N_{\rm S}$",
+        ylabel=r"$M_{\rm GC} \, / \, M_{\rm halo} \times 10^{-5}$",
+        xlim=(0.0, x_max),
+        ylim=(1.0, 9.0),
+        legend=True,
+        legend_kwargs={"loc": "upper left", "ncol": 2},
+    )
+    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_yticks([1, 3, 5, 7, 9])
+    write_figure(2, "mgc_mhalo_ratio", fig)
 
-    ns_levels, ns_cmap, ns_norm, ns_boundaries, ns_color_lookup = _build_discrete_ns_style(ns_values)
-
-    # Figure 3: global radial number-density profile, initial vs final.
+    # Figure 3: global initial/final radial number-density profiles.
     fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(4.8, 3.2))
-    halo_ids = gc["hid_z0"].to_numpy(dtype=int)
-    for i_ns, ns in enumerate(ns_values):
-        model = models[float(ns)]
-        c0, d0 = _surface_density_mean_by_halo(halo_ids, model.r_init, r_bins)
-        c1, d1 = _surface_density_mean_by_halo(
-            halo_ids,
-            model.r_final,
-            r_bins,
-            extra_mask=_final_survivor_mask(model),
-        )
-        color = ns_color_lookup[float(ns)]
-        ax.plot(c0, d0, "--", lw=1.0, color=color)
-        ax.plot(c1, d1, "-", lw=1.0, color=color)
+    centers_init, density_init = _surface_density_mean_by_halo(halo_ids, model.r_init, r_bins)
+    centers_final, density_final = _surface_density_mean_by_halo(
+        halo_ids,
+        model.r_final,
+        r_bins,
+        extra_mask=final_mask,
+    )
+    ax.plot(centers_init, density_init, "--", lw=1.1, color="black", label=f"{model_label} init")
+    ax.plot(centers_final, density_final, "-", lw=1.3, color="black", label=f"{model_label} final")
     if include_observables:
         f3_g14 = obs_overlay["fig3_G14"]
         f3_b21 = obs_overlay["fig3_B21"]
@@ -1528,7 +1243,8 @@ def build_reproduction(
             ms=1.5,
             capsize=1.5,
             lw=0.5,
-            label="B21")
+            label="B21",
+        )
         ax.errorbar(
             f3_rbc["r_kpc"],
             f3_rbc["Sigma"],
@@ -1539,66 +1255,56 @@ def build_reproduction(
             ms=1.5,
             capsize=1.5,
             lw=0.5,
-            label="RBCver.5")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel(r"$r~[\mathrm{kpc}]$")
-    ax.set_ylabel(r"$\Sigma~[\mathrm{kpc}^{-2}]$")
-    ax.set_xlim(0.01, 200.0)
-    ax.set_ylim(1.0e-4, 2.0e4)
+            label="RBCver.5",
+        )
+    finish_log_axis(
+        ax,
+        xlabel=r"$r~[\mathrm{kpc}]$",
+        ylabel=r"$\Sigma~[\mathrm{kpc}^{-2}]$",
+        xlim=(0.01, 200.0),
+        ylim=(1.0e-4, 2.0e4),
+        legend=True,
+        legend_kwargs={"loc": "upper right", "ncol": 1},
+    )
     ax.set_xticks([0.01, 0.1, 1, 10, 100])
     ax.set_yticks([1.0e-4, 1.0e-2, 1.0, 100.0, 10000.0])
-    if include_observables:
-        plt.legend(frameon=False, loc="upper right", ncol=1)
-    _add_discrete_ns_colorbar(
-        fig,
-        ax,
-        ns_levels=ns_levels,
-        cmap=ns_cmap,
-        norm=ns_norm,
-        boundaries=ns_boundaries,
-    )
-    save(3, "surface_number_density")
+    write_figure(3, "surface_number_density", fig)
 
     # Figure 6: z_hm histogram.
-    plt.figure(constrained_layout=True, dpi=STD_DPI, figsize=(6.0, 4.2))
-    plt.hist(halo_meta["z_hm"].to_numpy(), bins=22, alpha=0.85)
-    plt.xlabel(r"$z_{\rm h}$")
-    plt.ylabel(r"\# halos")
-    plt.xlim(0.0, 3.75)
-    plt.xticks([0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5])
-    save(6, "z_h_hist")
+    fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(6.0, 4.2))
+    ax.hist(z_hm_values, bins=22, alpha=0.85)
+    finish_axis(
+        ax,
+        xlabel=r"$z_{\rm h}$",
+        ylabel=r"\# halos",
+        xlim=(0.0, 3.75),
+    )
+    ax.set_xticks([0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5])
+    write_figure(6, "z_h_hist", fig)
 
-    # Figure 7: radial profiles split by z_hm terciles.
-    ref_ns = min(ns_values, key=lambda x: abs(float(x) - 2.0))
-    model_ref = models[float(ref_ns)]
-    plt.figure(constrained_layout=True, dpi=STD_DPI, figsize=(4.8, 3.6))
-    zhm_style = {
-        "low": ("tab:blue", r"$z_{\rm h}<%.1f$" % q1),
-        "mid": ("tab:green", r"$z_{\rm h}\in[%.1f,%.1f]$" % (q1, q2)),
-        "high": ("tab:red", r"$z_{\rm h}>%.1f$" % q2),
-    }
-    for lbl in ["low", "mid", "high"]:
-        hid_sel = halo_meta.index[halo_meta["zhm_bin"] == lbl].to_numpy()
-        mask = gc["hid_z0"].isin(hid_sel).to_numpy()
-        c0, d0 = _surface_density_mean_by_halo(
+    # Figure 7: radial profiles split into the existing z_hm terciles.
+    fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(4.8, 3.6))
+    for label_key in ["low", "mid", "high"]:
+        hid_sel = halo_meta.index[halo_meta["zhm_bin"] == label_key].to_numpy(dtype=int)
+        mask = np.isin(halo_ids, hid_sel)
+        centers_init, density_init = _surface_density_mean_by_halo(
             halo_ids[mask],
-            model_ref.r_init[mask],
+            model.r_init[mask],
             r_bins,
         )
-        c1, d1 = _surface_density_mean_by_halo(
+        centers_final, density_final = _surface_density_mean_by_halo(
             halo_ids[mask],
-            model_ref.r_final[mask],
+            model.r_final[mask],
             r_bins,
-            extra_mask=_final_survivor_mask(model_ref, mask)[mask],
+            extra_mask=final_mask[mask],
         )
-        color, label = zhm_style[lbl]
-        plt.plot(c0, d0, "--", lw=1.5, color=color, label=f"{label}")
-        plt.plot(c1, d1, "-", lw=1.8, color=color)
+        color, label = zhm_style[label_key]
+        ax.plot(centers_init, density_init, "--", lw=1.5, color=color, label=label)
+        ax.plot(centers_final, density_final, "-", lw=1.8, color=color)
     if include_observables:
         f3_b21 = obs_overlay["fig3_B21"]
         f3_rbc = obs_overlay["fig3_RBCver5"]
-        plt.errorbar(
+        ax.errorbar(
             f3_b21["r_kpc"],
             f3_b21["Sigma"],
             xerr=f3_b21["xerr"],
@@ -1610,7 +1316,7 @@ def build_reproduction(
             lw=1.0,
             label="B21",
         )
-        plt.errorbar(
+        ax.errorbar(
             f3_rbc["r_kpc"],
             f3_rbc["Sigma"],
             xerr=f3_rbc["xerr"],
@@ -1622,377 +1328,269 @@ def build_reproduction(
             lw=1.0,
             label="RBCver.5",
         )
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.xlabel(r"$r~[\mathrm{kpc}]$")
-    plt.ylabel(r"$\Sigma~[\mathrm{kpc}^{-2}]$")
-    plt.xlim(0.1, 200.0)
-    plt.ylim(1.0e-4, 2.0e2)
-    plt.yticks([1.0e-4, 1.0e-2, 1.0, 100.0])
-    plt.legend(frameon=False)
-    save(7, "number_density_by_z_h")
+    ax.plot([], [], "--", color="0.25", lw=1.2, label="init")
+    ax.plot([], [], "-", color="0.25", lw=1.5, label="final")
+    finish_log_axis(
+        ax,
+        xlabel=r"$r~[\mathrm{kpc}]$",
+        ylabel=r"$\Sigma~[\mathrm{kpc}^{-2}]$",
+        xlim=(0.1, 200.0),
+        ylim=(1.0e-4, 2.0e2),
+        legend=True,
+        legend_kwargs={"loc": "best", "ncol": 2},
+    )
+    ax.set_yticks([1.0e-4, 1.0e-2, 1.0, 100.0])
+    write_figure(7, "number_density_by_z_h", fig)
 
-    # Figure 8: MW-like in-situ final mass function.
+    # Figure 8: MW-like in-situ final GC mass function.
     insitu = gc["isMPB"].to_numpy().astype(bool)
     mw_hid_nominal = _select_halos_by_logmh(gc, 11.7, 11.9, fallback_n=3)
-    mw_hid = (
-        mw_hid_nominal
-        if len(mw_hid_nominal) >= 8
-        else halo_meta.index.to_numpy(dtype=int)
-    )
-    mw_mask = gc["hid_z0"].isin(mw_hid).to_numpy() & insitu
+    mw_hid = mw_hid_nominal if len(mw_hid_nominal) >= 8 else halo_meta.index.to_numpy(dtype=int)
+    mw_mask = np.isin(halo_ids, mw_hid) & insitu
     m_bins = np.logspace(3.8, 7.1, 12)
+    centers, hist = _mass_histograms_by_halo(
+        halo_ids[mw_mask],
+        model.m_final[mw_mask],
+        m_bins,
+        extra_mask=final_mask[mw_mask],
+    )
+    if hist.shape[0] == 0:
+        raise ValueError("Cannot build Fig. 08 because the selected MW-like sample has no in-situ GCs.")
+    med = np.median(hist, axis=0)
+    q25, q75 = np.quantile(hist, [0.25, 0.75], axis=0)
     fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(4.5, 3.0))
-    for ns in ns_values:
-        model = models[float(ns)]
-        extra_mask = mw_mask & _final_survivor_mask(model)
-        cent, hist = _mass_histograms_by_halo(
-            halo_ids[mw_mask],
-            model.m_final[mw_mask],
-            m_bins,
-            extra_mask=extra_mask[mw_mask],
-        )
-        med = np.median(hist, axis=0)
-        ax.plot(cent, med, lw=1.0)
-        if abs(float(ns) - 2.0) < 1.0e-8:
-            q25, q75 = np.quantile(hist, [0.25, 0.75], axis=0)
-            ax.fill_between(cent, q25, q75, color="lightsteelblue", alpha=0.55, lw=0.0, label=r"$N_{\rm S}=2.0$ \\ 25\%-75\% quantile")
+    ax.plot(centers, med, lw=1.0, label=model_label)
+    ax.fill_between(
+        centers,
+        q25,
+        q75,
+        color="lightsteelblue",
+        alpha=0.55,
+        lw=0.0,
+        label=f"{model_label} 25\%-75\% quantile",
+    )
     if include_observables:
         f8 = obs_overlay["fig8_mass_obs"]
         ax.plot(f8["mass_msun"], f8["count"], color="black", lw=1.0, label="B21")
-    ax.set_xscale("log")
-    ax.set_ylim(-0.5, 48.0)
-    ax.set_xlabel(r"$M_{\rm GC}~[M_\odot]$")
-    ax.set_ylabel(r"\# GCs per halo")
-    if include_observables:
-        ax.legend(frameon=False, loc="upper right", ncol=1)
-    _add_discrete_ns_colorbar(
-        fig,
+    finish_axis(
         ax,
-        ns_levels=ns_levels,
-        cmap=ns_cmap,
-        norm=ns_norm,
-        boundaries=ns_boundaries,
+        xlabel=r"$M_{\rm GC}~[M_\odot]$",
+        ylabel=r"\# GCs per halo",
+        xscale="log",
+        ylim=(-0.5, 48.0),
+        legend=True,
+        legend_kwargs={"loc": "upper right", "ncol": 1},
     )
-    save(8, "mass_function_MW_insitu_GCs")
+    write_figure(8, "mass_function_MW_insitu_GCs", fig)
 
-    # Figure 10: cumulative initial / final mass profiles averaged over all candidate halos.
+    # Figure 10: cumulative initial and deposited stellar-mass profiles.
     r_grid_pc = np.logspace(0.0, 4.0, 120)
+    c_init = _cumulative_mean_by_halo(
+        halo_ids,
+        1000.0 * model.r_init,
+        gc["M_form"].to_numpy(dtype=float),
+        r_grid_pc,
+    )
+    r_dep_kpc, c_dep = _deposit_mean_profile(
+        gao_output.deposit_profile,
+        grid_kpc=r_grid_pc / 1000.0,
+    )
+    r_dep_pc = 1000.0 * r_dep_kpc
+    mean_smbh, std_smbh = _mean_and_std(halo_table_all["M_smbh"].to_numpy(dtype=float))
+    mean_bh_total, std_bh_total = _mean_and_std(halo_table_all["M_bh_total"].to_numpy(dtype=float))
     fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(5.1, 3.6))
-    smbh_x_fig10 = np.geomspace(2.05, 3.05, len(ns_values))
-    bh_total_x_fig10 = np.geomspace(2.05, 3.05, len(ns_values))
-    smbh_means_fig10: List[float] = []
-    bh_total_means_fig10: List[float] = []
-    for i_ns, ns in enumerate(ns_values):
-        model = models[float(ns)]
-        color = ns_color_lookup[float(ns)]
-        c_init = _cumulative_mean_by_halo(
-            halo_ids,
-            1000.0 * model.r_init,
-            gc["M_form"].to_numpy(),
-            r_grid_pc,
+    ax.plot(r_grid_pc, c_init, "--", color="black", lw=1.0, label=f"{model_label} init")
+    ax.plot(r_dep_pc, c_dep, "-", color="black", lw=1.2, label=f"{model_label} depo")
+    if np.isfinite(mean_smbh) and mean_smbh > 0.0:
+        ax.errorbar(
+            [2.5],
+            [mean_smbh],
+            yerr=std_smbh if std_smbh > 0.0 else None,
+            fmt="^",
+            ms=3.5,
+            mfc="white",
+            mec="tab:blue",
+            color="tab:blue",
+            capsize=3.0,
+            zorder=8,
+            label="sunk BHs",
         )
-        if model.deposit_profile is not None:
-            r_dep_kpc, c_final = _deposit_mean_profile(
-                model.deposit_profile,
-                grid_kpc=r_grid_pc / 1000.0,
-            )
-            r_dep_pc = 1000.0 * r_dep_kpc
-        else:
-            r_dep_pc = r_grid_pc
-            c_final = _cumulative_mean_by_halo(
-                halo_ids,
-                1000.0 * model.r_final,
-                model.m_final,
-                r_grid_pc,
-                extra_mask=_final_survivor_mask(model),
-            )
-        ax.plot(r_grid_pc, c_init, "--", color=color, lw=1.0)
-        ax.plot(r_dep_pc, c_final, "-", color=color, lw=1.0)
-        halo_table_ns = _halo_level_table(
-            gc=gc,
-            halo_meta=halo_meta,
-            model=model,
-            nsc_radius_kpc=float(mw_obs.r_nsc_pc) / 1000.0,
+    if np.isfinite(mean_bh_total) and mean_bh_total > 0.0:
+        ax.errorbar(
+            [2.5],
+            [mean_bh_total],
+            yerr=std_bh_total if std_bh_total > 0.0 else None,
+            fmt="D",
+            ms=3.5,
+            mfc="white",
+            mec="tab:orange",
+            color="tab:orange",
+            capsize=3.0,
+            zorder=8,
+            label="total BHs",
         )
-        mean_smbh, std_smbh = _mean_and_std(halo_table_ns["M_smbh"].to_numpy(dtype=float))
-        mean_bh_total, std_bh_total = _mean_and_std(
-            halo_table_ns["M_bh_total"].to_numpy(dtype=float)
-        )
-        if np.isfinite(mean_smbh) and mean_smbh > 0.0:
-            smbh_means_fig10.append(mean_smbh)
-            ax.errorbar(
-                [smbh_x_fig10[i_ns]],
-                [mean_smbh],
-                yerr=std_smbh if std_smbh > 0.0 else None,
-                fmt="^",
-                ms=3.5,
-                mfc="white",
-                mec=color,
-                color=color,
-                capsize=3.0,
-                zorder=8,
-                label="sunk BHs" if len(smbh_means_fig10) == 1 else None,
-            )
-        if np.isfinite(mean_bh_total) and mean_bh_total > 0.0:
-            bh_total_means_fig10.append(mean_bh_total)
-            ax.errorbar(
-                [bh_total_x_fig10[i_ns]],
-                [mean_bh_total],
-                yerr=std_bh_total if std_bh_total > 0.0 else None,
-                fmt="D",
-                ms=3.5,
-                mfc="white",
-                mec=color,
-                color=color,
-                capsize=3.0,
-                zorder=8,
-                label="total BHs" if len(bh_total_means_fig10) == 1 else None,
-            )
-    _add_nsc_smbh_points_pc(ax, mw_obs, show_labels=True)
-    _add_nsc_smbh_points_pc(ax, m31_obs, show_labels=True)
-    ax.plot([], [], "--", color="gray", lw=1.2, label="init")
-    ax.plot([], [], "-", color="gray", lw=1.6, label="depo")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel(r"$r~[\mathrm{pc}]$")
-    ax.set_ylabel(r"$M_{\rm encl}~[M_\odot]$")
-    ax.set_xlim(2.0, 1.0e4)
+    if include_observables:
+        _add_nsc_smbh_points_pc(ax, mw_obs, show_labels=True)
+        _add_nsc_smbh_points_pc(ax, m31_obs, show_labels=True)
+    bh_means = [value for value in [mean_smbh, mean_bh_total] if np.isfinite(value) and value > 0.0]
     ylo10 = 1.0e6
-    bh_means_fig10 = smbh_means_fig10 + bh_total_means_fig10
-    if bh_means_fig10:
-        ylo10 = min(ylo10, 10.0 ** np.floor(np.log10(max(min(bh_means_fig10), 1.0e-6))))
-    ax.set_ylim(ylo10, 3.0e8)
-    ax.legend(frameon=False, loc="lower right", ncol=2)
-    _add_discrete_ns_colorbar(
-        fig,
+    if bh_means:
+        ylo10 = min(ylo10, 10.0 ** np.floor(np.log10(max(min(bh_means), 1.0e-6))))
+    finish_log_axis(
         ax,
-        ns_levels=ns_levels,
-        cmap=ns_cmap,
-        norm=ns_norm,
-        boundaries=ns_boundaries,
+        xlabel=r"$r~[\mathrm{pc}]$",
+        ylabel=r"$M_{\rm encl}~[M_\odot]$",
+        xlim=(2.0, 1.0e4),
+        ylim=(ylo10, 3.0e8),
+        legend=True,
+        legend_kwargs={"loc": "lower right", "ncol": 2},
     )
-    save(10, "cum_mass")
+    write_figure(10, "cum_mass", fig)
 
-    halo_table_ref_all = _halo_level_table(
-        gc=gc,
-        halo_meta=halo_meta,
-        model=model_ref,
-        nsc_radius_kpc=float(mw_obs.r_nsc_pc) / 1000.0,
-    )
-
-    # Figure 11: cumulative mass profiles by z_hm terciles, with all halo
-    # profiles shown faintly in the background and tercile averages on top.
+    # Figure 11: deposited cumulative profiles split by z_hm tercile.
     fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(6.6, 4.8))
-    bg_init_color = "0.78"
-    bg_dep_color = "0.62"
-    bg_lw = 0.45
-    bg_alpha = 0.10
     mass_form_all = gc["M_form"].to_numpy(dtype=float)
     for hid in np.unique(halo_ids):
         hmask = halo_ids == hid
-        c_init_h = _cumulative_profile(
-            1000.0 * model_ref.r_init[hmask],
-            mass_form_all[hmask],
-            r_grid_pc,
-        )
-        ax.plot(r_grid_pc, c_init_h, "--", lw=bg_lw, color=bg_init_color, alpha=bg_alpha, zorder=1)
-    if model_ref.deposit_profile is not None:
-        grid_kpc = r_grid_pc / 1000.0
-        for hid, radii, cum in zip(
-            model_ref.deposit_profile.halo_ids,
-            model_ref.deposit_profile.r_outer_kpc,
-            model_ref.deposit_profile.cumulative_mass_msun,
-        ):
-            radii = np.asarray(radii, dtype=float)
-            cum = np.asarray(cum, dtype=float)
-            if len(radii) == 0 or len(cum) == 0:
-                continue
-            c_dep_h = np.interp(grid_kpc, radii, cum, left=0.0, right=cum[-1])
-            ax.plot(r_grid_pc, c_dep_h, "-", lw=bg_lw, color=bg_dep_color, alpha=bg_alpha, zorder=1)
-    else:
-        final_mask_all = _final_survivor_mask(model_ref)
-        for hid in np.unique(halo_ids):
-            hmask = (halo_ids == hid) & final_mask_all
-            c_dep_h = _cumulative_profile(
-                1000.0 * model_ref.r_final[hmask],
-                model_ref.m_final[hmask],
-                r_grid_pc,
-            )
-            ax.plot(r_grid_pc, c_dep_h, "-", lw=bg_lw, color=bg_dep_color, alpha=bg_alpha, zorder=1)
-    for lbl in ["low", "mid", "high"]:
-        hid_sel = halo_meta.index[halo_meta["zhm_bin"] == lbl].to_numpy()
-        sel = gc["hid_z0"].isin(hid_sel).to_numpy()
+        c_init_h = _cumulative_profile(1000.0 * model.r_init[hmask], mass_form_all[hmask], r_grid_pc)
+        ax.plot(r_grid_pc, c_init_h, "--", lw=0.45, color="0.78", alpha=0.10, zorder=1)
+    for hid, radii, cum in zip(
+        gao_output.deposit_profile.halo_ids,
+        gao_output.deposit_profile.r_outer_kpc,
+        gao_output.deposit_profile.cumulative_mass_msun,
+    ):
+        radii = np.asarray(radii, dtype=float)
+        cum = np.asarray(cum, dtype=float)
+        c_dep_h = np.interp(r_grid_pc / 1000.0, radii, cum, left=0.0, right=cum[-1])
+        ax.plot(r_grid_pc, c_dep_h, "-", lw=0.45, color="0.62", alpha=0.10, zorder=1)
+    for label_key in ["low", "mid", "high"]:
+        hid_sel = halo_meta.index[halo_meta["zhm_bin"] == label_key].to_numpy(dtype=int)
+        sel = np.isin(halo_ids, hid_sel)
         c_init = _cumulative_mean_by_halo(
             halo_ids,
-            1000.0 * model_ref.r_init,
-            gc["M_form"].to_numpy(),
+            1000.0 * model.r_init,
+            mass_form_all,
             r_grid_pc,
             extra_mask=sel,
         )
-        if model_ref.deposit_profile is not None:
-            r_dep_kpc, c_final = _deposit_mean_profile(
-                model_ref.deposit_profile,
-                grid_kpc=r_grid_pc / 1000.0,
-                halo_ids=hid_sel,
-            )
-            r_dep_pc = 1000.0 * r_dep_kpc
-        else:
-            r_dep_pc = r_grid_pc
-            c_final = _cumulative_mean_by_halo(
-                halo_ids,
-                1000.0 * model_ref.r_final,
-                model_ref.m_final,
-                r_grid_pc,
-                extra_mask=sel & _final_survivor_mask(model_ref),
-            )
-        color, label = zhm_style[lbl]
+        r_dep_kpc, c_dep = _deposit_mean_profile(
+            gao_output.deposit_profile,
+            grid_kpc=r_grid_pc / 1000.0,
+            halo_ids=hid_sel,
+        )
+        color, label = zhm_style[label_key]
         ax.plot(r_grid_pc, c_init, "--", lw=1.8, color=color, label=label, zorder=3)
-        ax.plot(r_dep_pc, c_final, "-", lw=2.0, color=color, zorder=4)
-    _add_nsc_smbh_points_pc(ax, mw_obs, show_labels=True)
-    _add_nsc_smbh_points_pc(ax, m31_obs, show_labels=True)
+        ax.plot(1000.0 * r_dep_kpc, c_dep, "-", lw=2.0, color=color, zorder=4)
+    if include_observables:
+        _add_nsc_smbh_points_pc(ax, mw_obs, show_labels=True)
+        _add_nsc_smbh_points_pc(ax, m31_obs, show_labels=True)
     ax.plot([], [], "--", color="0.45", lw=1.2, label="init")
     ax.plot([], [], "-", color="0.45", lw=1.6, label="depo")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel(r"$r~[\mathrm{pc}]$")
-    ax.set_ylabel(r"$M_{\rm encl}~[M_\odot]$")
-    ax.set_xlim(2.0, 1.0e4)
-    ax.set_ylim(4.0e4, 2.0e9)
-    ax.legend(frameon=False, loc="lower right", ncol=2)
-    save(11, "cum_mass_by_zhm")
-
-    # Figure 16: z_hm correlation panels for MW-like halos.
-    halo_table_all = halo_table_ref_all
-    halo_table = halo_table_all.loc[halo_table_all.index.intersection(mw_hid)].dropna(subset=["z_hm"])
-    fig, axs = plt.subplots(4, 1, figsize=(5.4, 10.2), sharex=True)
-    x = halo_table["z_hm"].to_numpy()
-
-    for ax, yv, ylabel in [
-        (axs[0], halo_table["M_halo"].to_numpy(), r"$m_{halo}\,(M_{\odot})$"),
-        (axs[1], halo_table["M_gc_init"].to_numpy(), r"$m_{GCi}\,(M_{\odot})$"),
-        (axs[2], halo_table["M_nsc"].to_numpy(), r"$m_{NSC}\,(M_{\odot})$"),
-        (axs[3], halo_table["M_gc_final"].to_numpy(), r"$m_{GCf}\,(M_{\odot})$"),
-    ]:
-        ax.scatter(x, yv, s=7, alpha=0.75, color="black", linewidths=0)
-        fx, fy, flo, fhi = _fit_band(x, yv)
-        if np.any(np.isfinite(fx)):
-            ax.plot(fx, fy, color="gray", lw=1.3)
-            ax.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
-        ax.text(0.05, 0.82, f"r={_pearson_r(x, yv):.2f}", transform=ax.transAxes)
-        ax.set_ylabel(ylabel)
-        ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    axs[-1].set_xlabel(r"$z_{hm}$")
-    save(16, "corr_zhm_panels")
-
-    # Figure 17: halo-level initial vs final GC masses for MW-like halos.
-    fig = plt.figure(constrained_layout=True, dpi=STD_DPI, figsize=(6.0, 4.5))
-    ax = fig.add_subplot(111)
-    x_all = halo_table["M_gc_init"].to_numpy()
-    y_all = np.clip(halo_table["M_gc_final"].to_numpy(), 1.0, None)
-    zhm_all = halo_table["z_hm"].to_numpy()
-    sc = ax.scatter(
-        x_all,
-        y_all,
-        c=zhm_all,
-        s=12,
-        alpha=0.9,
-        cmap="jet",
-        linewidths=0,
+    ax.plot([], [], color="none", label=model_label)
+    finish_log_axis(
+        ax,
+        xlabel=r"$r~[\mathrm{pc}]$",
+        ylabel=r"$M_{\rm encl}~[M_\odot]$",
+        xlim=(2.0, 1.0e4),
+        ylim=(4.0e4, 2.0e9),
+        legend=True,
+        legend_kwargs={"loc": "lower right", "ncol": 2},
     )
-    fx, fy, flo, fhi = _fit_band(x_all, y_all, logx=True, logy=True)
-    ax.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
-    ax.plot(fx, fy, color="black", lw=1.3)
-    ax.text(0.20, 0.73, f"r={_pearson_r(np.log10(x_all), np.log10(y_all)):.2f}", transform=ax.transAxes)
-    cb = fig.colorbar(sc, ax=ax)
-    cb.set_label(r"$z_{hm}$")
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel(r"$m_{GCi}\,(M_{\odot})$")
-    ax.set_ylabel(r"$m_{GCf}\,(M_{\odot})$")
-    save(17, "m_init_vs_m_final")
+    write_figure(11, "cum_mass_by_zhm", fig)
 
-    # Figure 18: NSC-mass correlations against halo / GC mass metrics for MW-like halos.
-    fig, axs = plt.subplots(3, 1, figsize=(5.0, 9.0), sharey=True)
-    y_nsc = halo_table["M_nsc"].to_numpy()
-    x1 = halo_table["M_halo"].to_numpy() / 1.0e12
-    x2 = np.clip(halo_table["M_gc_init"].to_numpy(), 1.0, None)
-    x3 = np.clip(halo_table["M_gc_final"].to_numpy(), 1.0, None)
-
-    configs = [
-        (axs[0], x1, r"$m_{halo}\,(10^{12}M_{\odot})$", False, True, _pearson_r(x1, _log10_positive_or_nan(y_nsc))),
-        (axs[1], x2, r"$m_{GCi}\,(M_{\odot})$", True, True, _pearson_r(_log10_positive_or_nan(x2), _log10_positive_or_nan(y_nsc))),
-        (axs[2], x3, r"$m_{GCf}\,(M_{\odot})$", True, True, _pearson_r(_log10_positive_or_nan(x3), _log10_positive_or_nan(y_nsc))),
+    # Figures 16--18 use the existing halo-level MW-like sample.
+    halo_table = halo_table_all.loc[halo_table_all.index.intersection(mw_hid)].dropna(subset=["z_hm"])
+    fig, axs = plt.subplots(4, 1, figsize=(5.4, 10.2), dpi=STD_DPI, sharex=True, constrained_layout=True)
+    x = halo_table["z_hm"].to_numpy(dtype=float)
+    panel_data = [
+        (axs[0], halo_table["M_halo"].to_numpy(dtype=float), r"$m_{halo}\,(M_{\odot})$"),
+        (axs[1], halo_table["M_gc_init"].to_numpy(dtype=float), r"$m_{GCi}\,(M_{\odot})$"),
+        (axs[2], halo_table["M_nsc"].to_numpy(dtype=float), r"$m_{NSC}\,(M_{\odot})$"),
+        (axs[3], halo_table["M_gc_final"].to_numpy(dtype=float), r"$m_{GCf}\,(M_{\odot})$"),
     ]
-    for ax, xx, xlabel, logx, logy, rr in configs:
-        scatter_mask = np.isfinite(xx) & np.isfinite(y_nsc)
-        if logy:
-            scatter_mask &= y_nsc > 0
-        if logx:
-            scatter_mask &= xx > 0
-        ax.scatter(xx[scatter_mask], y_nsc[scatter_mask], s=8, alpha=0.75, color="black", linewidths=0)
-        fx, fy, flo, fhi = _fit_band(xx, y_nsc, logx=logx, logy=logy)
+    for ax_panel, y_values, ylabel in panel_data:
+        ax_panel.scatter(x, y_values, s=7, alpha=0.75, color="black", linewidths=0)
+        fx, fy, flo, fhi = _fit_band(x, y_values)
         if np.any(np.isfinite(fx)):
-            ax.plot(fx, fy, color="gray", lw=1.3)
-            ax.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
-        ax.set_xlabel(xlabel)
-        ax.set_ylabel(r"$m_{NSC}\,(M_{\odot})$")
-        ax.set_yscale("log")
+            ax_panel.plot(fx, fy, color="gray", lw=1.3)
+            ax_panel.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
+        ax_panel.text(0.05, 0.82, f"r={_pearson_r(x, y_values):.2f}", transform=ax_panel.transAxes)
+        finish_axis(ax_panel, ylabel=ylabel)
+        ax_panel.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
+    x_max = float(np.max(x)) if len(x) else 0.0
+    finish_axis(axs[-1], xlabel=r"$z_{hm}$", xlim=(0.0, max(3.75, x_max)))
+    write_figure(16, "corr_zhm_panels", fig)
+
+    fig, ax = plt.subplots(constrained_layout=True, dpi=STD_DPI, figsize=(6.0, 4.5))
+    x_all = halo_table["M_gc_init"].to_numpy(dtype=float)
+    y_all = np.clip(halo_table["M_gc_final"].to_numpy(dtype=float), 1.0, None)
+    zhm_all = halo_table["z_hm"].to_numpy(dtype=float)
+    scatter = ax.scatter(x_all, y_all, c=zhm_all, s=12, alpha=0.9, cmap="jet", linewidths=0)
+    fx, fy, flo, fhi = _fit_band(x_all, y_all, logx=True, logy=True)
+    if np.any(np.isfinite(fx)):
+        ax.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
+        ax.plot(fx, fy, color="black", lw=1.3)
+    ax.text(0.20, 0.73, f"r={_pearson_r(np.log10(x_all), np.log10(y_all)):.2f}", transform=ax.transAxes)
+    colourbar = fig.colorbar(scatter, ax=ax)
+    colourbar.set_label(r"$z_{hm}$")
+    finish_log_axis(
+        ax,
+        xlabel=r"$m_{GCi}\,(M_{\odot})$",
+        ylabel=r"$m_{GCf}\,(M_{\odot})$",
+    )
+    write_figure(17, "m_init_vs_m_final", fig)
+
+    fig, axs = plt.subplots(3, 1, figsize=(5.0, 9.0), dpi=STD_DPI, sharey=True, constrained_layout=True)
+    y_nsc = halo_table["M_nsc"].to_numpy(dtype=float)
+    x1 = halo_table["M_halo"].to_numpy(dtype=float) / 1.0e12
+    x2 = np.clip(halo_table["M_gc_init"].to_numpy(dtype=float), 1.0, None)
+    x3 = np.clip(halo_table["M_gc_final"].to_numpy(dtype=float), 1.0, None)
+    configs = [
+        (axs[0], x1, r"$m_{halo}\,(10^{12}M_{\odot})$", False, _pearson_r(x1, _log10_positive_or_nan(y_nsc))),
+        (axs[1], x2, r"$m_{GCi}\,(M_{\odot})$", True, _pearson_r(_log10_positive_or_nan(x2), _log10_positive_or_nan(y_nsc))),
+        (axs[2], x3, r"$m_{GCf}\,(M_{\odot})$", True, _pearson_r(_log10_positive_or_nan(x3), _log10_positive_or_nan(y_nsc))),
+    ]
+    for ax_panel, xx, xlabel, logx, correlation in configs:
+        scatter_mask = np.isfinite(xx) & np.isfinite(y_nsc) & (y_nsc > 0.0)
         if logx:
-            ax.set_xscale("log")
-        ax.text(0.82, 0.12, f"r={rr:.2f}", transform=ax.transAxes)
-    save(18, "corr_nsc_panels")
+            scatter_mask &= xx > 0.0
+        ax_panel.scatter(xx[scatter_mask], y_nsc[scatter_mask], s=8, alpha=0.75, color="black", linewidths=0)
+        fx, fy, flo, fhi = _fit_band(xx, y_nsc, logx=logx, logy=True)
+        if np.any(np.isfinite(fx)):
+            ax_panel.plot(fx, fy, color="gray", lw=1.3)
+            ax_panel.fill_between(fx, flo, fhi, color="lightgray", alpha=0.75, lw=0.0)
+        finish_axis(
+            ax_panel,
+            xlabel=xlabel,
+            ylabel=r"$m_{NSC}\,(M_{\odot})$",
+            xscale="log" if logx else None,
+            yscale="log",
+        )
+        ax_panel.text(0.82, 0.12, f"r={correlation:.2f}", transform=ax_panel.transAxes)
+    write_figure(18, "corr_nsc_panels", fig)
 
     return written_paths
-
-
-def _parse_ns_values_arg(text: str) -> List[float]:
-    """Parse comma-separated N_s values (optionally wrapped by brackets)."""
-
-    cleaned = text.strip().strip("[]")
-    if not cleaned:
-        raise ValueError("Empty --ns-values string.")
-    out = []
-    for token in cleaned.split(","):
-        tok = token.strip()
-        if not tok:
-            continue
-        out.append(float(tok))
-    if not out:
-        raise ValueError("No valid N_s values parsed from --ns-values.")
-    return out
-
-
-def _resolve_default_ns_values(allcat_path: Path) -> List[float]:
-    """Default to run metadata when available, otherwise keep the legacy Gao grid."""
-
-    run_meta = _read_run_metadata(allcat_path)
-    ns_values = run_meta.get("ns_values")
-    if isinstance(ns_values, list) and len(ns_values) > 0:
-        return [float(value) for value in ns_values]
-    return [float(value) for value in LEGACY_DEFAULT_NS_VALUES]
 
 
 def main() -> None:
     """CLI entry point."""
 
-    parser = argparse.ArgumentParser(description="Reproduce Gao+2023 figure suite.")
+    parser = argparse.ArgumentParser(description="Reproduce the maintained Gao+2024 figure subset.")
     parser.add_argument(
         "--out_dir",
         type=Path,
         required=True,
         help=(
-            "Model output directory containing the root allcat file, mpb_from_fixed_trees.csv, "
-            "ns*/, and run_metadata.json."
+            "Finished modern output directory containing one allcat_s-*.txt, finalGCs.dat, "
+            "depos.dat, haloSummary.csv, haloSummaryByZ.csv, mpb_from_fixed_trees.csv, and run_metadata.json."
         ),
     )
     parser.add_argument(
-        "--ns-values",
-        type=str,
+        "--plot-dir",
+        type=Path,
         default=None,
-        help="Comma-separated N_s values, e.g. '0.5,1.0,1.5'. Defaults to run_metadata.json when present.",
+        help="Directory for the ten PDFs; defaults to <out_dir>/_plots_Gao+2024.",
     )
-    parser.add_argument("--seed", type=int, default=7, help="Random seed for stochastic scatter.")
     parser.add_argument("--final-z", "--final-redshift", dest="final_z", type=float, default=None)
     parser.add_argument(
         "--no-observables",
@@ -2001,18 +1599,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     out_dir = args.out_dir.resolve()
-    allcat_path, mpb_path = _resolve_model_inputs_from_out_dir(out_dir)
-    plot_dir = default_plot_dir(out_dir, "Gao+2024")
-    ns_values = _parse_ns_values_arg(args.ns_values) if args.ns_values is not None else _resolve_default_ns_values(allcat_path)
+    gao_output = load_modern_output(out_dir, final_redshift=args.final_z)
+    plot_dir = (args.plot_dir if args.plot_dir is not None else default_plot_dir(out_dir, "Gao+2024")).resolve()
 
     figure_paths = build_reproduction(
-        allcat_path=allcat_path,
-        mpb_path=mpb_path,
+        gao_output=gao_output,
         output_dir=plot_dir,
-        ns_values=ns_values,
-        seed=args.seed,
         include_observables=not args.no_observables,
-        final_redshift=args.final_z,
     )
     print(f"FIGURES_WRITTEN {len(figure_paths)}")
     print(f"OUTPUT_DIR {plot_dir}")

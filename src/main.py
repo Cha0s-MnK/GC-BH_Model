@@ -56,7 +56,7 @@ def _build_arg_parser():
     )
     parser.add_argument("--p2", type=float, default=6.75, help="GC formation-efficiency normalization")
     parser.add_argument("--p3", type=float, default=0.5, help="halo growth-rate threshold for triggering GC formation")
-    parser.add_argument("--lg_cut-off_mass", dest="lg_cut_off_mass", type=float, default=12.0, help="log10 Schechter cutoff mass Mc in Msun")
+    parser.add_argument("--lg_cut-off_mass", dest="lg_cut_off_mass", type=float, default=7.0, help="log10 Schechter cutoff mass Mc in Msun")
     parser.add_argument(
         "--Mmin",
         type=float,
@@ -64,7 +64,7 @@ def _build_arg_parser():
         help=(
             "minimum initial GC mass Mmin in linear Msun (default: 1e5); "
             "finite and positive and less than 1e6 Msun; controls the CIMF "
-            "lower endpoint and event-budget eligibility"
+            "lower endpoint, while every positive event budget is sampled stochastically"
         ),
     )
     parser.add_argument(
@@ -336,53 +336,45 @@ def clusterFormation(Mg, halomass, redshift, metallicity, SM, is_mpb, hid, jj, b
     Mgc = 1.8e-4 * p2 * Mg #total mass of all GCs formed in cluster formation event
     check_finite_positive(Mgc, "GC mass budget in clusterFormation")
     log_Mgc = np.log10(Mgc)
-    if(log_Mgc < log_Mmin): #not enough mass to form a single cluster of mass Mmin
-        return gc_list
-    # First reserve the most massive cluster explicitly, then sample the rest
-    # from the Schechter CIMF until the event budget Mgc is exhausted.
-    # This mirrors the historical Fortran/IDL logic used in the original model.
-    # calculate the cumulative distribution r(<M), and invert it numerically
-    log_Mmax = mgc_to_mmax(log_Mgc)
-    if(log_Mmax > log_Mgc):
+
+    log_Mmax = float(mgc_to_mmax(log_Mgc))
+    if log_Mgc >= log_Mmin and log_Mmax > log_Mgc:
         log_Mmax = log_Mgc
-    Mmax = 10**log_Mmax
-    mt = np.logspace(log_Mmin, log_Mmax, num = 500)
+    if (not np.isfinite(log_Mmax)) or log_Mmax < log_Mmin:
+        raise ValueError(f"Invalid ICMF upper endpoint log10(Mmax)={log_Mmax} for Mgc={Mgc}")
+    Mmax = float(10.0 ** log_Mmax)
+    if (not np.isfinite(Mmax)) or Mmax < Mmin:
+        raise ValueError(f"Invalid ICMF upper endpoint Mmax={Mmax} for Mmin={Mmin}")
 
-    maxGC_metallicity = metallicity + np.random.normal(0, 0.3)
-    gc_radius_pc, sigma_h_msun_pc2, imbh_mass_msun = seed_imbh_properties(Mmax, maxGC_metallicity, fit=fit)
-    maxGC = GC(
-        Mmax,
-        halomass,
-        redshift,
-        maxGC_metallicity,
-        SM,
-        Mg,
-        is_mpb,
-        hid,
-        gc_radius_pc = gc_radius_pc,
-        gc_sigma_h_msun_pc2 = sigma_h_msun_pc2,
-        imbh_mass_msun = imbh_mass_msun,
-        branch_id = branch_id,
-        formation_tree_index = formation_tree_index,
-    )
-    gc_list.append(maxGC)
-    mass_sum = Mmax
+    if Mmax <= Mmin:
+        r_to_m = None
+    else:
+        mt = np.logspace(log_Mmin, log_Mmax, num = 500)
+        ntot = ug52 - upper_gamma2_log_mass(log_Mmax, mc)
+        if (not np.isfinite(ntot)) or ntot <= 0.0:
+            raise ValueError(f"Invalid ICMF normalisation for Mmin={Mmin}, Mmax={Mmax}")
+        cum = np.array([
+            (ug52 - upper_gamma2_log_mass(np.log10(mv), mc)) / ntot
+            for mv in mt
+        ])
+        cum[0] = 0.0
+        cum[-1] = 1.0
+        keep = np.concatenate(([True], np.diff(cum) > 0.0))
+        if np.count_nonzero(keep) < 2:
+            r_to_m = None
+        else:
+            r_to_m = interpolate.interp1d(cum[keep], mt[keep], bounds_error = True)
 
-    ntot = ug52 - upper_gamma2_log_mass(log_Mmax, mc)
-    cum = np.array([(ug52 - upper_gamma2_log_mass(np.log10(mv), mc))/ntot for mv in mt])
+    def sample_icmf_mass():
+        if r_to_m is None:
+            return float(Mmin)
+        return float(r_to_m(np.random.random()))
 
-    r_to_m = interpolate.interp1d(cum, mt)
-    mass_sum2 = Mmax
-    while(mass_sum < Mgc):
-        r = np.random.random()
-        M = r_to_m(r)
-        if(mass_sum+M > Mgc): #make sure the final cluster drawn doesn't exceed the total mass to be formed. it may produce some clusters below Mmin, but shouldn't really matter (will disrupt)
-            M = Mgc-mass_sum
-        mass_sum += M
-        cluster_metallicity = metallicity + np.random.normal(0, 0.3)
-        gc_radius_pc, sigma_h_msun_pc2, imbh_mass_msun = seed_imbh_properties(M, cluster_metallicity, fit=fit)
-        cluster = GC(
-            M,
+    def make_cluster(mass):
+        cluster_metallicity = metallicity + np.random.normal(0, 0.2)
+        gc_radius_pc, sigma_h_msun_pc2, imbh_mass_msun = seed_imbh_properties(mass, cluster_metallicity, fit=fit)
+        return GC(
+            mass,
             halomass,
             redshift,
             cluster_metallicity,
@@ -396,13 +388,54 @@ def clusterFormation(Mg, halomass, redshift, metallicity, SM, is_mpb, hid, jj, b
             branch_id = branch_id,
             formation_tree_index = formation_tree_index,
         )
-        gc_list.append(cluster)
+
+    if Mgc < Mmin:
+        sampled_mass = sample_icmf_mass()
+        acceptance_probability = Mgc / sampled_mass
+        if np.random.random() < acceptance_probability:
+            gc_list.append(make_cluster(sampled_mass))
+            mass_sum = sampled_mass
+        else:
+            return gc_list
+    else:
+        maxGC_metallicity = metallicity + np.random.normal(0, 0.2)
+        gc_radius_pc, sigma_h_msun_pc2, imbh_mass_msun = seed_imbh_properties(Mmax, maxGC_metallicity, fit=fit)
+        gc_list.append(GC(
+            Mmax,
+            halomass,
+            redshift,
+            maxGC_metallicity,
+            SM,
+            Mg,
+            is_mpb,
+            hid,
+            gc_radius_pc = gc_radius_pc,
+            gc_sigma_h_msun_pc2 = sigma_h_msun_pc2,
+            imbh_mass_msun = imbh_mass_msun,
+            branch_id = branch_id,
+            formation_tree_index = formation_tree_index,
+        ))
+        mass_sum = Mmax
+
+        while mass_sum < Mgc:
+            residual = Mgc - mass_sum
+            sampled_mass = sample_icmf_mass()
+            if sampled_mass <= residual:
+                gc_list.append(make_cluster(sampled_mass))
+                mass_sum += sampled_mass
+                continue
+            acceptance_probability = residual / sampled_mass
+            if np.random.random() < acceptance_probability:
+                gc_list.append(make_cluster(sampled_mass))
+                mass_sum += sampled_mass
+            break
 
     # Shuffle before assigning radii so the maxGC does not always
     # inherit the smallest radius purely because it was appended first.
     np.random.shuffle(gc_list)
     # sample spatial distribution of GCs within a Sersic disk
-    gc_sersic_sampling(gc_list, mass_sum, halomass, redshift, re_kpc, re_source, ns)
+    if gc_list:
+        gc_sersic_sampling(gc_list, mass_sum, halomass, redshift, re_kpc, re_source, ns)
     return gc_list
 
 
@@ -429,7 +462,7 @@ def _legacy_tree_entries(tree_dir):
         if(path.suffix.lower() not in (".txt", ".dat")):
             continue
         try:
-            hid = int(path.stem)
+            hid = int(parse_exact_int64(path.stem, name="fixed-tree halo ID"))
         except ValueError:
             continue
         tree_entries.append(TreeEntry(halo_id_z0 = hid, path = path))
@@ -444,7 +477,7 @@ def _iter_tree_files(tree_dir):
         with lookup_path.open("r", encoding = "utf-8", newline = "") as handle:
             for row in csv.DictReader(handle):
                 try:
-                    hid = int(row["halo_id_z0"])
+                    hid = int(parse_exact_int64(row["halo_id_z0"], name="tree-lookup halo ID"))
                     basename = row["fixed_tree_basename"].strip()
                 except (KeyError, ValueError) as exc:
                     raise RuntimeError("Malformed tree lookup row in " + str(lookup_path) + ": " + str(row)) from exc
@@ -576,10 +609,10 @@ def loadTree(tree_path):
             try:
                 parsed = [
                     float(cols[0]),
-                    int(cols[1]),
-                    int(cols[2]),
-                    int(cols[3]),
-                    int(cols[4]),
+                    parse_fixed_tree_id(cols[1], name="fixed-tree first progenitor ID", allow_minus_one=True),
+                    parse_fixed_tree_id(cols[2], name="fixed-tree subhalo ID"),
+                    parse_fixed_tree_id(cols[3], name="fixed-tree branch ID"),
+                    parse_fixed_tree_id(cols[4], name="fixed-tree descendant ID", allow_minus_one=True),
                     float(cols[5]),
                     float(cols[6]),
                     float(cols[7]),
@@ -613,7 +646,7 @@ def loadTree(tree_path):
 
     if(len(log_mh) == 0):
         empty_float = np.array([], dtype = float)
-        empty_int = np.array([], dtype = int)
+        empty_int = np.array([], dtype = np.int64)
         return (
             empty_float,
             empty_int,
@@ -627,9 +660,9 @@ def loadTree(tree_path):
 
     log_mh = np.asarray(log_mh, dtype = float)
     mass_msun = np.power(10.0, log_mh)
-    first_prog_id = np.asarray(first_prog_id, dtype = int)
-    subhalo_id = np.asarray(subhalo_id, dtype = int)
-    branch_id = np.asarray(branch_id, dtype = int)
+    first_prog_id = np.asarray(first_prog_id, dtype = np.int64)
+    subhalo_id = np.asarray(subhalo_id, dtype = np.int64)
+    branch_id = np.asarray(branch_id, dtype = np.int64)
     redshift = np.asarray(redshift, dtype = float)
     spin_norm = np.asarray(spin_norm, dtype = float)
 
@@ -713,10 +746,11 @@ for tree_entry in formation_tree_entries:
     # Go through each halo along the tree and look for events satisfying Rm > p3.
     sm_arr = np.zeros(len(redshifts))
     clusters = []
+    galaxy_scatter = {int(branch): np.random.normal(0.0, 0.3) for branch in np.unique(mpi)}
     for i in range(0, len(m)) : #for each halo in the merger tree
         mass = m[i] #mass of this halo
         fpID = fp[i] #ID of the main progenitor
-        jj = jsp[i]
+        jj = jsp[i] * 1.0e3 / ReducedH0 # [(kpc/h)(km/s)] --> [pc(km/s)]
 
         if(fpID == -1 or len(subid[subid == fpID]) == 0): #then we've reached the first point along this track of the tree
             sm_arr[i] = Mstar_SMHM(Mhalo=mass, z=redshifts[i], scatter=True) #assign a "seed" stellar mass which we will grow self-consistently
@@ -740,10 +774,9 @@ for tree_entry in formation_tree_entries:
         sm_arr[i] = SM
         Mg = gasMass(SM, mass, znow)
         if(ratio > p3):  #if merger criterion satisfied
-            metallicity = gSMMR(SM, znow)
+            metallicity = gSMMR(SM, znow) + galaxy_scatter[int(mpi[i])]
             is_mpb = mpi[i] == mpbi
-            #Re = resolve_birth_re_kpc(halomass_msun = mass, redshift = znow, jsp = jj) # [kpc]
-            Re = calcRe(mhalo_1e9msun=mass/1.0e9, t_Gyr=Redshift2CosmicAge(znow, time_unit="Gyr"), j=jj) # [kpc]
+            Re = calcRe(Mhalo_1e9Msun=mass/1.0e9, t_Gyr=Redshift2CosmicAge(znow, time_unit="Gyr"), j=jj) # [kpc]
             # `subid[i]` records the halo hosting the formation event; later
             # stages use it to mark MPB vs accreted GCs in merged catalogs.
             clusters.extend(clusterFormation(Mg, mass, znow, metallicity, SM, is_mpb, subid[i], jj, mpi[i], i, Re, "Gao+2024", fit=fit))
@@ -755,7 +788,7 @@ for tree_entry in formation_tree_entries:
     # All formed GCs are passed to the dynamic evolution stage for survival and
     # deposition decisions.
     GC_mets = np.array([cluster.metallicity for cluster in clusters]); GC_masses = np.array([cluster.mass for cluster in clusters]); GC_log_masses = np.log10(GC_masses); GC_redshifts = np.array([cluster.origin_redshift for cluster in clusters])
-    GC_idform = np.array([cluster.idform for cluster in clusters]); GC_mhost_tform = np.array([cluster.originHaloMass for cluster in clusters])
+    GC_idform = np.asarray([parse_exact_int64(cluster.idform, name="formation subhalo ID") for cluster in clusters], dtype = np.int64); GC_mhost_tform = np.array([cluster.originHaloMass for cluster in clusters])
     GC_log_mhost_tform = np.log10(GC_mhost_tform); GC_log_mstar_tform = np.round(np.log10(np.array([cluster.origin_sm for cluster in clusters])), 3)
     GC_log_mgas_tform = np.round(np.log10(np.array([cluster.origin_mgas for cluster in clusters])), 3)
     GC_radius = np.array([cluster.rGalaxy for cluster in clusters])
@@ -768,11 +801,9 @@ for tree_entry in formation_tree_entries:
     # The host column refers to the descendant z=0 halo.
     for i in range(len(GC_masses)): #all clusters
         allcat.write(
-            str(hid_num)
-            + " "
-            + str(np.round(logmsub,5))
-            + " "
-            + str(GC_idform[i])
+            f"{hid_num:d} "
+            + f"{np.round(logmsub,5)} "
+            + f"{int(GC_idform[i]):d} "
             + " "
             + str(np.round(GC_log_mhost_tform[i],5))
             + " "

@@ -6,8 +6,9 @@ from __future__ import annotations # Annotations are not evaluated immediately w
 import math # to be optimized
 import numpy as np
 import scipy
-from scipy import interpolate
+from scipy import interpolate, optimize
 from typing import Tuple
+import re
 import warnings
 
 # physical constants (reference: https://en.wikipedia.org/wiki/List_of_physical_constants)
@@ -86,6 +87,38 @@ def check_finite_positive(val, name="val"):
         raise ValueError(f"{name} must be finite and positive, but got {val}!")
     return val
 
+def parse_exact_int64(value, name="integer"):
+    """Parse one exact signed 64-bit integer from an integer or decimal token."""
+
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an exact decimal integer, not a boolean: {value!r}")
+    if isinstance(value, (int, np.integer)):
+        integer = int(value)
+    elif isinstance(value, str):
+        token = value.strip()
+        if re.fullmatch(r"[+-]?[0-9]+", token) is None:
+            raise ValueError(f"{name} must be an exact decimal integer token; got {value!r}")
+        integer = int(token, 10)
+    else:
+        raise ValueError(f"{name} must be an exact integer value or decimal token; got {value!r}")
+    limits = np.iinfo(np.int64)
+    if integer < int(limits.min) or integer > int(limits.max):
+        raise ValueError(
+            f"{name}={integer} is outside the signed int64 range "
+            f"[{int(limits.min)}, {int(limits.max)}]."
+        )
+    return np.int64(integer)
+
+def parse_fixed_tree_id(value, name="fixed-tree identifier", *, allow_minus_one=False):
+    """Parse a fixed-tree ID and enforce its schema-specific lower bound."""
+
+    identifier = parse_exact_int64(value, name=name)
+    minimum = -1 if allow_minus_one else 0
+    if identifier < minimum:
+        bound = "-1" if allow_minus_one else "0"
+        raise ValueError(f"{name} must be greater than or equal to {bound}; got {identifier}.")
+    return identifier
+
 def fixed_tree_mpb_branch_id(log_mh, branch_id): # to be checked
     """Return the project MPB branch ID from fixed-tree rows.
 
@@ -107,25 +140,7 @@ def fixed_tree_mpb_branch_id(log_mh, branch_id): # to be checked
 
     branch_values = []
     for value in branch_raw:
-        if isinstance(value, (int, np.integer)):
-            branch = int(value)
-        elif isinstance(value, str):
-            try:
-                branch = int(value)
-            except ValueError:
-                value_float = check_finite(float(value), name="fixed-tree branch ID")
-                if abs(value_float) > 2**53:
-                    raise ValueError("Large fixed-tree branch IDs must be read as integers, not float-like text.")
-                branch = int(round(value_float))
-                if abs(value_float - float(branch)) > 1.0e-6:
-                    raise ValueError(f"Fixed-tree branch ID is not integer-like: {value}")
-        else:
-            value_float = check_finite(float(value), name="fixed-tree branch ID")
-            if abs(value_float) > 2**53:
-                raise ValueError("Large fixed-tree branch IDs must be read as integers, not floats.")
-            branch = int(round(value_float))
-            if abs(value_float - float(branch)) > 1.0e-6:
-                raise ValueError(f"Fixed-tree branch ID is not integer-like: {value}")
+        branch = int(parse_exact_int64(value, name="fixed-tree branch ID"))
         if branch < 0:
             raise ValueError(f"Fixed-tree branch ID must be non-negative; got {branch}")
         branch_values.append(branch)
@@ -279,29 +294,15 @@ def Rv(Mhalo: float, z: float) -> float:
     # virial radius in kpc
     return np.cbrt(3.0 * Mhalo / (4.0 * PI * Delta_c * rho_crit))
 
-"""
-def Rv_kpc(Mhalo_1e9Msun: float, t_Gyr: float, tun: Tunables) -> float:
-    check_finite_positive(Mhalo_1e9Msun, name="Halo mass Mhalo_1e9Msun")
-    check_finite_positive(t_Gyr, name="Cosmic age in Gyr t_Gyr")
-
-    z = CosmicAge2Redshift(t_Gyr, time_unit="Gyr")
-    Omega_m_z = Omega_m(z)
-    Delta_c = (18.0 * PI * PI + 82.0 * (Omega_m_z - 1.0) - 39.0 * (Omega_m_z - 1.0) ** 2) / Omega_m_z
-    check_finite_positive(Delta_c, name="Average halo over-density at Rv Delta_c")
-    Rv_kpc = 163.0 / ((1.0 + z) * tun.h) * (Mhalo_1e9Msun * tun.h * 200.0 / (1.0e3 * Omega_m0 * Delta_c)) ** (1.0 / 3.0)
-    check_finite_positive(Rv_kpc, name="Halo virial radius in kpc Rv_kpc")
-    return Rv_kpc
-"""
-
 def CosmicAge2Redshift(t: float, time_unit: str = "Gyr") -> float:
     """cosmic age to redshift conversion for flat ΛCDM without radiation"""
     check_finite_positive(t, name="Cosmic age t")
     if time_unit == "Gyr":
         t = t
     elif time_unit == "Myr":
-        t = t * 1.0e3
+        t = t / 1.0e3
     elif time_unit == "yr":
-        t = t * 1.0e9
+        t = t / 1.0e9
     else:
         raise ValueError(f"Unknown time unit: {time_unit}")
 
@@ -340,25 +341,6 @@ def Mstar_SMHM(Mhalo: float, z: float, scatter: bool = False) -> float:
         xi = np.random.normal(0.0, 0.218 + 0.023 * z / (1.0 + z))
         lg_Mstar += xi
     return check_finite_positive(10 ** lg_Mstar, name="Stellar mass in M☉ Mstar")
-
-"""
-def Mstar_1e9Msun_SMHM(Mhalo_1e9Msun: float, t_Gyr: float, scatter: bool = False) -> float:
-    check_finite_positive(Mhalo_1e9Msun, name="Halo mass in 1e9 M☉ Mhalo_1e9Msun")
-    check_finite_positive(t_Gyr, name="Cosmic age in Gyr t_Gyr")
-
-    z = CosmicAge2Redshift(t_Gyr, time_unit="Gyr")
-    a = 1.0 / (1.0 + z)
-    nu = math.exp(- 4.0 * a * a)
-    epsilon = 10.0 ** (- 1.777 - 0.006 * (a - 1.0) * nu - 0.119 * (a - 1.0))
-    M1 = 10.0 ** (11.514 - (1.793 * (a - 1.0) + 0.251 * z) * nu)
-    lg_Mstar = math.log10(epsilon * M1) + f_x_SMHM(math.log10(Mhalo_1e9Msun * 1.0e9 / M1), z) - f_x_SMHM(0.0, z)
-    if scatter:
-        xi = np.random.normal(0.0, 0.218 + 0.023 * z / (1.0 + z))
-        lg_Mstar += xi
-    Mstar_1e9Msun = 10 ** lg_Mstar / 1.0e9
-    check_finite_positive(Mstar_1e9Msun, name="Stellar mass in 1e9 M☉ Mstar_1e9Msun")
-    return Mstar_1e9Msun
-"""
 
 # Schechter star cluster initial mass function
 
@@ -414,8 +396,8 @@ def makeLogMgcToLogMmaxInterpolator(Mc: float, Mmin: float = 3.0e4, dlog_mmax: f
 
     Returns
     -------
-    scipy.interpolate.interp1d
-        Interpolator with usage:
+    callable
+        Callable with usage:
 
             log_mmax = interp(log_mgc)
 
@@ -464,12 +446,34 @@ def makeLogMgcToLogMmaxInterpolator(Mc: float, Mmin: float = 3.0e4, dlog_mmax: f
             "Cannot build a safe inverse interpolator."
         )
 
-    return interpolate.interp1d(
+    tabulated_inverse = interpolate.interp1d(
         log_mgc_grid,
         log_mmax_grid,
         bounds_error=True,
         assume_sorted=True,
     )
+
+    def log_mgc_to_log_mmax(log_mgc):
+        log_mgc_value = check_finite(log_mgc, name="log10 total GC mass")
+        if log_mgc_value >= float(log_mgc_grid[0]):
+            return float(tabulated_inverse(log_mgc_value))
+
+        target_mgc = 10.0 ** log_mgc_value
+        if not np.isfinite(target_mgc) or target_mgc <= 0.0:
+            raise ValueError(f"Total GC mass is not representable as a positive finite value: {log_mgc_value}")
+
+        def residual(log_mmax):
+            mmax = 10.0 ** float(log_mmax)
+            x_max = mmax / Mc
+            mgc = Mc * (gamma0_min - upperIncompleteGamma0(x_max)) / upperIncompleteGammaMinus1(x_max)
+            return float(mgc - target_mgc)
+
+        lower = float(log_mmin)
+        upper = float(log_mmax_grid[0])
+        log_mmax = optimize.brentq(residual, lower, upper, xtol=1.0e-14, rtol=4.0 * np.finfo(float).eps)
+        return float(max(log_mmax, lower))
+
+    return log_mgc_to_log_mmax
 
 def upper_gamma2_log_mass(log_m: float, Mc: float) -> float: # to be checked
     """Return Gamma(-1, M/Mc) for a base-10 log mass."""
@@ -497,14 +501,16 @@ def resolve_birth_re_kpc(halomass_msun: float, redshift: float, jsp: float) -> f
     return check_finite_positive(Re, name="Gao+2024 birth effective radius in kpc")
 """
 
-def calcRe(mhalo_1e9msun: float, t_Gyr: float, j: float) -> float:
+def calcRe(Mhalo_1e9Msun: float, t_Gyr: float, j: float) -> float:
     """compute the effective radius of the galactic disc in kpc"""
+    check_finite_positive(Mhalo_1e9Msun, name="Halo mass in 1e9 M☉ Mhalo_1e9Msun")
+    check_finite_positive(t_Gyr, name="Cosmic age in Gyr t_Gyr")
+    check_finite_positive(j, name="Specific angular momentum in pc(km/s) j")
 
-    Mhalo = float(mhalo_1e9msun) * 1.0e9
+    Mhalo = float(Mhalo_1e9Msun) * 1.0e9
     Rv_kpc = Rv(Mhalo=Mhalo, z=CosmicAge2Redshift(t_Gyr, time_unit="Gyr"))
-    lambdaB = j / math.sqrt(2.0 * G_kpc * Mhalo * Rv_kpc)
-    Re = lambdaB * Rv_kpc / math.sqrt(2.0)
-    return check_finite_positive(Re, name="Effective radius of the galactic disc in kpc Re")
+    lambdaB = j / math.sqrt(2.0 * G_Arepo * Mhalo * Rv_kpc * 1.0e3)
+    return check_finite_positive(lambdaB * Rv_kpc / math.sqrt(2.0), name="Effective radius of the galactic disc in kpc Re")
 
 """
 Function-only scalar IMBH seeding estimator for GC formation outputs.
@@ -544,19 +550,18 @@ def calcSigma_h(Mcl: float, r_h: float) -> float:
     """Projected half-mass surface density in M☉/pc².
 
     The input radius is the 3D half-mass radius.  For a Plummer profile,
-    r_h_2D = r_h / 1.305 and Sigma_h = M / (2 pi r_h_2D^2).
+    Sigma_h = M / (2 pi (2 ** (2/3) - 1) r_h^2).
     """
     check_finite_positive(Mcl, name="Star cluster mass Mcl in M☉")
     check_finite_positive(r_h, name="Star cluster 3D half-mass radius r_h in pc")
 
-    r_h_2D  = r_h / 1.305
-    Sigma_h = Mcl / (2.0 * PI * r_h_2D**2)
+    Sigma_h = Mcl / (2.0 * PI * (np.cbrt(4.0) - 1) * (r_h ** 2))
     return check_finite_positive(Sigma_h, name="Projected half-mass surface density Sigma_h in M☉/pc²")
 
 def calcMimbhEq9(Sigma_h: float, Z: float) -> float:
     """Eq.9: IMBH mass fit within the calibrated surface-density range."""
     Sigma_h = check_finite_positive(Sigma_h, name="Projected 2D half-mass surface density Sigma_h in M☉/pc²")
-    lgZ     = math.log10(check_finite_non_negative(Z, name="Metallicity Z in Z☉"))
+    lgZ     = math.log10(check_finite_positive(Z, name="Metallicity Z in Z☉"))
 
     if Z < 0.126:
         A, B, C, lgSigma_crit = - 1790.07 * lgZ - 7392.65, 162.46 * lgZ + 829.42, 4734.11 * lgZ + 16556.82, 0.0386 * lgZ + 4.53
@@ -565,7 +570,7 @@ def calcMimbhEq9(Sigma_h: float, Z: float) -> float:
     else:
         A, B, C, lgSigma_crit = 1147.68 * lgZ - 721.18, - 166.92 * lgZ + 126.15, - 2002.25 * lgZ + 471.59, 0.91 * lgZ + 5.22
     lgSigma_h = math.log10(Sigma_h)
-    Mimbh = 0.0 if Sigma_h <= 10.0**lgSigma_crit else A * lgSigma_h + B * lgSigma_h**2 + C
+    Mimbh = 0.0 if Sigma_h < 10.0**lgSigma_crit else A * lgSigma_h + B * lgSigma_h**2 + C
     Mimbh = check_finite(Mimbh, name="Eq.9 IMBH mass Mimbh in M☉")
     Mimbh = Mimbh if Mimbh >= 100.0 else 0.0
     return Mimbh
@@ -573,7 +578,7 @@ def calcMimbhEq9(Sigma_h: float, Z: float) -> float:
 def calcMimbhEq10(Sigma_h: float, Z: float) -> float:
     """Eq.10: high-surface-density extrapolation."""
     Sigma_h = check_finite_positive(Sigma_h, name="Projected 2D half-mass surface density Sigma_h in M☉/pc²")
-    lgZ     = math.log10(check_finite_non_negative(Z, name="Metallicity Z in Z☉"))
+    lgZ     = math.log10(check_finite_positive(Z, name="Metallicity Z in Z☉"))
 
     if Z < 0.079:
         D, E = - 37.37 * lgZ + 1452.33, 81.66 * lgZ - 6892.57
@@ -586,93 +591,15 @@ def calcMimbhEq10(Sigma_h: float, Z: float) -> float:
     Mimbh = Mimbh if Mimbh >= 100.0 else 0.0
     return Mimbh
 
-"""
-def eq9_coeffs(Z: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    #Piecewise coefficients for Eq.9, using literal Z/Z☉
-
-    lgZ = np.log10(check_finite_non_negative(Z, name="Metallicity Z in Z☉"))
-
-    A = np.where(Z < 0.126, -1790.07 * lgZ - 7392.65,
-                  np.where(Z < 0.398, 9707.84 * lgZ + 2627.71,
-                            1147.68 * lgZ - 721.18))
-    B = np.where(Z < 0.126, 162.46 * lgZ + 829.42,
-                  np.where(Z < 0.398, -1015.72 * lgZ - 211.38,
-                            -166.92 * lgZ + 126.15))
-    C = np.where(Z < 0.126, 4734.11 * lgZ + 16556.82,
-                  np.where(Z < 0.398, -23585.20 * lgZ - 7814.04,
-                            -2002.25 * lgZ + 471.59))
-    lgSigma_crit = np.where(Z < 0.126, 0.0386 * lgZ + 4.53,
-                               np.where(Z < 0.398, 0.91 * lgZ + 5.22,
-                                         0.91 * lgZ + 5.22))
-    return A, B, C, lgSigma_crit
-
-def eq10_coeffs(Z: float) -> Tuple[np.ndarray, np.ndarray]:
-    #Piecewise coefficients for Eq.10, using literal Z/Z☉
-
-    lgZ = np.log10(check_finite_non_negative(Z, name="Metallicity Z in Z☉"))
-
-    D = np.where(Z < 0.079, -37.37 * lgZ + 1452.33,
-                  np.where(Z < 0.316, -922.15 * lgZ + 466.71,
-                            -611.27 * lgZ + 628.40))
-    E = np.where(Z < 0.079, 81.66 * lgZ - 6892.57,
-                  np.where(Z < 0.316, 4242.58 * lgZ - 2280.02,
-                            2620.25 * lgZ - 3137.93))
-    return D, E
-
-def imbh_mass_eq9(sigma_h_msun_pc2, z_ratio):
-    #Eq.9: IMBH mass fit within the calibrated surface-density range.
-
-    sigma_h = np.asarray(sigma_h_msun_pc2, dtype=float)
-    z = np.asarray(z_ratio, dtype=float)
-    scalar_output = sigma_h.ndim == 0 and z.ndim == 0
-    sigma_h, z = np.broadcast_arrays(sigma_h, z)
-
-    A, B, C, lgSigma_crit = eq9_coeffs(z)
-    lgSigma_h = np.log10(np.clip(sigma_h, 1.0e-30, None))
-    mass = A * lgSigma_h + B * lgSigma_h**2 + C
-    mass = np.where(sigma_h >= 10.0**lgSigma_crit, mass, 0.0)
-    mass = np.where(np.isfinite(mass), mass, 0.0)
-    mass = np.clip(mass, 0.0, None)
-    return float(mass) if scalar_output else mass
-
-def imbh_mass_eq10(sigma_h_msun_pc2, z_ratio):
-    #Eq.10: high-surface-density extrapolation.
-
-    sigma_h = np.asarray(sigma_h_msun_pc2, dtype=float)
-    z = np.asarray(z_ratio, dtype=float)
-    scalar_output = sigma_h.ndim == 0 and z.ndim == 0
-    sigma_h, z = np.broadcast_arrays(sigma_h, z)
-
-    D, E = eq10_coeffs(z)
-    mass = D * np.log10(np.clip(sigma_h, 1.0e-30, None)) + E
-    mass = np.where(np.isfinite(mass), mass, 0.0)
-    mass = np.clip(mass, 0.0, None)
-    return float(mass) if scalar_output else mass
-
-def imbh_mass_from_sigma_metallicity(sigma_h_msun_pc2, z_ratio):
-    #Estimate IMBH mass from Sigma_h and metallicity Z/Zsun.
-
-    sigma_h = np.asarray(sigma_h_msun_pc2, dtype=float)
-    z = np.asarray(z_ratio, dtype=float)
-    scalar_output = sigma_h.ndim == 0 and z.ndim == 0
-    sigma_h, z = np.broadcast_arrays(sigma_h, z)
-
-    mass = imbh_mass_eq9(sigma_h, z)
-    use_eq10 = np.log10(np.clip(sigma_h, 1.0e-30, None)) >= 5.22
-    mass = np.where(use_eq10, imbh_mass_eq10(sigma_h, z), mass)
-    mass = np.where(mass >= 100.0, mass, 0.0)
-    return float(mass) if scalar_output else mass
-"""
-
 def imbh_mass_from_sigma_metallicity(sigma_h_msun_pc2: float, z_ratio: float) -> float:
     """Estimate IMBH mass from Sigma_h and metallicity Z/Zsun."""
     Sigma_h = check_finite_positive(sigma_h_msun_pc2, name="Projected 2D half-mass surface density Sigma_h in M☉/pc²")
-    Z       = check_finite_non_negative(z_ratio, name="Metallicity Z in Z☉")
+    Z       = check_finite_positive(z_ratio, name="Metallicity Z in Z☉")
     #if Z < 0.01 or Z > 1.0:
     #    warnings.warn(f"Rantala+2026 IMBH fit evaluated outside 0.01 <= Z/Z☉ <= 1.0: Z/Z☉ = {Z:.6g}.",
     #        RuntimeWarning, stacklevel=2)
 
-    Mimbh = calcMimbhEq10(Sigma_h, Z) if math.log10(Sigma_h) >= 5.22 else calcMimbhEq9(Sigma_h, Z)
+    Mimbh = calcMimbhEq10(Sigma_h, Z) if math.log10(Sigma_h) > 5.2 else calcMimbhEq9(Sigma_h, Z)
     return Mimbh if Mimbh >= 100.0 else 0.0
 
 def imbh_mass_from_cluster_mass(Mcl: float, fit: str) -> float:
@@ -722,7 +649,7 @@ def estimate_for_gc(Mcl: float, Z: float, fit: str = DEFAULT_IMBH_FIT) -> dict:
         Same output keys as the original class-based implementation.
     """
     Mcl = check_finite_positive(Mcl, name="Star cluster mass Mcl in M☉")
-    Z   = check_finite_non_negative(Z, name="Metallicity Z in Z☉")
+    Z   = check_finite_positive(Z, name="Metallicity Z in Z☉")
     fit = validate_imbh_fit(fit)
 
     r_h     = initMRRofSCs(Mcl=Mcl, f_h=0.125)

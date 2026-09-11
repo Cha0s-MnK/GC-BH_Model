@@ -26,16 +26,15 @@ MIN_RAD_KPC = MIN_RAD_PC * 1.0e-3
 NSC_RAD_KPC = NSC_RAD_PC * 1.0e-3
 
 STAT_ALIVE = 1 # GC is still alive at the end of the evolution
-STAT_EXHAUSTED = -1 # GC is fully disrupted by the end of the evolution, but never sank to the center
-STAT_TORN = -2 # GC is fully disrupted by the end of the evolution, and sank to the center before disruption completed
-STAT_SUNK = -3 # GC sank to the center before it was fully disrupted, so the final mass is not zero but the GC is still considered lost
-STAT_WANDERER = -4 # GC is tagged as a wanderer at formation because its IMBH mass exceeds its stellar mass; it is considered lost regardless of its final radius or mass
-STAT_WANDERER_SUNK = -5 # GC is tagged as a wanderer at formation and also sank to the center; this is a subset of STAT_WANDERER but is tracked separately for potential future analysis of IMBH wanderers that do sink to the center
+STAT_DISRUPT = 0 # GC is disrupted by the end of the evolution; former exhausted and torn outcomes are merged
+STAT_SUNK_GC = -1 # ordinary GC sank to the central sink before the end of the evolution
+STAT_SUNK_BH = -2 # IMBH wanderer sank to the central sink before the end of the evolution
+STAT_WANDER = 2 # non-central IMBH wanderer at the end of the evolution
 
 FINAL_GC_HEADER = "\n".join([
     "gc_index status M_GC_final m_init_msun lookback_time_final_gyr lookback_time_init_gyr r_final_kpc r_init_kpc M_IMBH_final",
     ("rows: one GC per input GCini row; lookback times are measured from the configured final redshift; "
-     "status = 1 alive, -1 exhausted, -2 torn, -3 sunk_to_center, -4 IMBH_wanderer, -5 sunk_wanderer"),])
+     "status = 1 alive, 0 disrupted, -1 sunk GC, -2 sunk BH, 2 wanderer"),])
 
 DEPOS_HEADER = "\n".join([
     "lookback_time_gyr bin_index r_inner_kpc r_outer_kpc m_depo_total_msun m_star_no_evo_msun m_star_with_evo_msun",
@@ -57,26 +56,61 @@ class Tunables:
     t_limit: float = 1.0e-2
 
 def _numeric_rows(path: Path) -> np.ndarray:
-    """Read whitespace-delimited numeric rows, ignoring comments and blanks."""
+    """Read one exact 13-column or 20-column GCini schema."""
 
-    rows: List[List[float]] = []
-    with path.open("r") as f:
-        for line in f:
-            s = line.strip()
-            if not s or s.startswith("#"):
+    integer_columns_by_width = {
+        13: {0, 2},
+        20: {0, 1, 15, 19},
+    }
+    rows: List[List[object]] = []
+    expected_width: Optional[int] = None
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            text = line.strip()
+            if not text or text.startswith("#"):
                 continue
+            tokens = text.split()
+            width = len(tokens)
+            if expected_width is None:
+                if width not in integer_columns_by_width:
+                    raise ValueError(
+                        f"Unsupported GCini schema in {path} at line {line_number}: "
+                        f"got {width} columns; expected exactly 13 or 20."
+                    )
+                expected_width = width
+            elif width != expected_width:
+                raise ValueError(
+                    f"Mixed GCini schemas in {path} at line {line_number}: "
+                    f"got {width} columns after {expected_width}-column rows; "
+                    "a file must use exactly one schema, 13 or 20 columns."
+                )
+
+            integer_columns = integer_columns_by_width[expected_width]
+            values: List[object] = []
             try:
-                vals = [float(v) for v in s.split()]
-            except ValueError:
-                continue
-            if len(vals) > 0:
-                rows.append(vals)
+                for column, token in enumerate(tokens):
+                    if column in integer_columns:
+                        values.append(parse_exact_int64(token, name=f"{path} line {line_number} column {column}"))
+                    else:
+                        values.append(check_finite(float(token), name=f"{path} line {line_number} column {column}"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError(
+                    f"Malformed GCini row in {path} at line {line_number}: {exc}"
+                ) from exc
+
+            if expected_width == 20 and int(values[19]) not in (0, 1):
+                raise ValueError(
+                    f"Malformed GCini row in {path} at line {line_number}: "
+                    f"deposit_only must be 0 or 1, got {values[19]!r}."
+                )
+            rows.append(values)
+
     if not rows:
-        return np.zeros((0, 0), dtype=float)
-    ncol = max(len(r) for r in rows)
-    out = np.zeros((len(rows), ncol), dtype=float)
-    for i, row in enumerate(rows):
-        out[i, : len(row)] = row
+        raise ValueError(f"GCini file {path} contains no data rows; expected exactly 13 or 20 columns.")
+
+    out = np.empty((len(rows), int(expected_width)), dtype=object)
+    for row_number, row in enumerate(rows):
+        out[row_number, :] = row
     return out
 
 def read_haloevo_mpb(path: Path) -> np.ndarray:
@@ -90,22 +124,35 @@ def read_haloevo_mpb(path: Path) -> np.ndarray:
             if not s or s.startswith("#"):
                 continue
             parts = s.split()
+            if parts[0].lower().startswith(("logmh", "log10_mhalo")):
+                continue
             try:
-                vals = [float(v) for v in parts]
-            except ValueError:
-                continue
-            if len(vals) < 9:
-                continue
-            cur_check = vals[0]
+                if len(parts) < 9:
+                    raise ValueError(f"expected at least 9 columns, got {len(parts)}")
+                cur_check = float(parts[0])
+                for index, name in enumerate((
+                    "first progenitor ID",
+                    "subhalo ID",
+                    "branch ID",
+                    "descendant ID",
+                ), start=1):
+                    parse_fixed_tree_id(
+                        parts[index],
+                        name=f"{path} {name}",
+                        allow_minus_one=name in {"first progenitor ID", "descendant ID"},
+                    )
+                physical = [float(value) for value in parts[5:9]]
+            except ValueError as exc:
+                raise ValueError(f"Malformed halo-evolution row in {path}: {s}; {exc}") from exc
             # Fixed tree files place extra side branches after the MPB block.
             # The MPB itself is monotonic in retained halo mass, so the first
             # drop marks the hand-off to non-MPB rows.
             if last_val is not None and cur_check < last_val:
                 break
-            rows.append(vals[:9])
+            rows.append([cur_check, *physical])
             last_val = cur_check
     if not rows:
-        return np.zeros((0, 9), dtype=float)
+        return np.zeros((0, 5), dtype=float)
     return np.asarray(rows, dtype=float)
 
 def rho_bkgd(r_kpc: float, SersicReff_kpc: float, Mv_1e9Msun: float, t_Gyr: float, tun: Tunables) -> float:
@@ -129,7 +176,7 @@ def rho_bkgd(r_kpc: float, SersicReff_kpc: float, Mv_1e9Msun: float, t_Gyr: floa
     dPhiNFW_dr = G_kpc * Mv_1e9Msun * 1.0e9 / (math.log(1.0 + c) - c / (1.0 + c)) * (math.log(1.0 + r_kpc / Rs) / (r_kpc * r_kpc) - 1.0 / ((Rs + r_kpc) * r_kpc))
 
     Mstar_encl = Mstar_SMHM(Mhalo=Mv_1e9Msun*1.0e9, z=CosmicAge2Redshift(t=t_Gyr, time_unit="Gyr")) * special.gammainc(2.2 * (3.0 - p), b * (r_kpc / SersicReff_kpc) ** (1.0 / 2.2))
-    return check_finite_positive(3.0 / (4.0 * PI * r_kpc ** 3) * ((r_kpc ** 2) * np.abs(dPhiNFW_dr) + G_kpc * Mstar_encl),
+    return check_finite_positive(3.0 / (4.0 * PI * r_kpc ** 3) * ((r_kpc ** 2) / G_kpc * np.abs(dPhiNFW_dr) + Mstar_encl),
                                  name="Background density in M☉/kpc³ rho_bg")
 
 def swf(t_gyr: float) -> float:
@@ -160,10 +207,10 @@ def assign_bin_fast(
 def cluster_halfmass_density(M_GC_1e5Msun: float) -> float:
     check_finite_positive(M_GC_1e5Msun, name="GC mass in 1e5 M☉ M_GC_1e5Msun")
     if M_GC_1e5Msun < 1.0:
-        return 1.0e3
+        return 1.0e3 * 1.0e9 # [M☉/pc³] --> [M☉/kpc³]
     if M_GC_1e5Msun > 10.0:
-        return 1.0e5
-    return 1.0e3 * (M_GC_1e5Msun**2)
+        return 1.0e5 * 1.0e9 # [M☉/pc³] --> [M☉/kpc³]
+    return 1.0e3 * (M_GC_1e5Msun**2) * 1.0e9 # [M☉/pc³] --> [M☉/kpc³]
 
 def vc_kms(Mgc_encl_1e5Msun: float, r_kpc: float, rho_bg: float) -> float:
     check_finite_non_negative(Mgc_encl_1e5Msun, name="Enclosed GC mass in 1e5 M☉ Mgc_encl_1e5Msun")
@@ -311,20 +358,14 @@ def evolve_single_halo(
     eddington_ratio = check_finite_non_negative(eddington_ratio, name="Eddington ratio f_Eddington")
 
     gc_init = _numeric_rows(gcini_path)
-    if gc_init.size == 0:
-        raise ValueError(f"No usable GC rows found in {gcini_path}")
-
     n_gc = gc_init.shape[0]
-    if gc_init.shape[1] < 10:
-        raise ValueError("GCini rows must have at least 10 columns")
+    n_columns = gc_init.shape[1]
+    if n_columns not in (13, 20):
+        raise ValueError(f"Internal GCini schema error in {gcini_path}: got {n_columns} columns; expected 13 or 20.")
 
-    # Modern GCini rows use the 13-column formation catalogue.  Internal
-    # continuation rows use 15 columns so satellite survivors can enter a new
-    # host with their current mass, age, and accretion radius without
-    # pretending they formed at the merger time.
     import_depo_channels = np.zeros((n_gc, 3), dtype=float)
     is_deposit_only = np.zeros(n_gc, dtype=bool)
-    if gc_init.shape[1] >= 15:
+    if n_columns == 20:
         m_gc_init = np.asarray(gc_init[:, 7], dtype=float) / 1.0e5
         z_gc_init = np.asarray(gc_init[:, 8], dtype=float)
         t_gc_init = np.array([Redshift2CosmicAge(z=z, time_unit="Gyr") for z in z_gc_init], dtype=float)
@@ -334,25 +375,23 @@ def evolve_single_halo(
         r_gc_init = gc_init[:, 10].astype(float)
         m_imbh_init = np.asarray(gc_init[:, 13], dtype=float) / 1.0e5
         m_imbh = np.asarray(gc_init[:, 14], dtype=float) / 1.0e5
-        if gc_init.shape[1] >= 20:
-            import_depo_channels = np.maximum(np.asarray(gc_init[:, 16:19], dtype=float), 0.0) / 1.0e5
-            is_deposit_only = np.asarray(gc_init[:, 19], dtype=float) > 0.5
-            m_gc_current[is_deposit_only] = 0.0
-            m_imbh_init[is_deposit_only] = 0.0
-            m_imbh[is_deposit_only] = 0.0
-            r_gc_init[is_deposit_only] = MIN_RAD_KPC
+        import_depo_channels = np.maximum(np.asarray(gc_init[:, 16:19], dtype=float), 0.0) / 1.0e5
+        deposit_only_values = np.asarray(gc_init[:, 19], dtype=np.int64)
+        if np.any((deposit_only_values != 0) & (deposit_only_values != 1)):
+            raise ValueError("GCini deposit_only values must be exactly 0 or 1.")
+        is_deposit_only = deposit_only_values == 1
+        m_gc_current[is_deposit_only] = 0.0
+        m_imbh_init[is_deposit_only] = 0.0
+        m_imbh[is_deposit_only] = 0.0
+        r_gc_init[is_deposit_only] = MIN_RAD_KPC
     else:
         m_gc_init = 10.0 ** (gc_init[:, 6] - 5.0)
         r_gc_init = gc_init[:, 9].astype(float)
         t_gc_init = np.array([Redshift2CosmicAge(z=z, time_unit="Gyr") for z in gc_init[:, 7]], dtype=float)
         m_gc_current = m_gc_init.copy()
         t_gc_current = t_gc_init.copy()
-        if gc_init.shape[1] > 12:
-            m_imbh_init = np.asarray(gc_init[:, 12], dtype=float) / 1.0e5
-            m_imbh = m_imbh_init.copy()
-        else:
-            m_imbh_init = np.zeros(n_gc, dtype=float)
-            m_imbh = np.zeros(n_gc, dtype=float)
+        m_imbh_init = np.asarray(gc_init[:, 12], dtype=float) / 1.0e5
+        m_imbh = m_imbh_init.copy()
 
     t_end = Redshift2CosmicAge(z=final_redshift, time_unit="Gyr")
     if np.any(t_gc_current > t_end + 1.0e-10):
@@ -378,11 +417,14 @@ def evolve_single_halo(
     is_wanderer = m_imbh >= (m_gc - 1.0e-12)
     is_wanderer[is_deposit_only] = False
     m_gc[is_wanderer] = m_imbh[is_wanderer]
-    status[is_deposit_only] = STAT_EXHAUSTED
+    status[is_deposit_only] = STAT_DISRUPT
     m_imbh_final = 1.0e5 * m_imbh.copy()
-    global_gc_index = np.arange(1, n_gc + 1, dtype=int)
-    if gc_init.shape[1] >= 16:
-        global_gc_index = np.asarray(gc_init[:, 15], dtype=int)
+    global_gc_index = np.arange(1, n_gc + 1, dtype=np.int64)
+    if n_columns == 20:
+        global_gc_index = np.asarray(
+            [parse_exact_int64(value, name="GCini global index") for value in gc_init[:, 15]],
+            dtype=np.int64,
+        )
 
     if int(tun.binnub) < 2:
         raise ValueError("binnub must be at least 2 so bin 1 can remain the fixed 0-1 pc aperture.")
@@ -441,9 +483,9 @@ def evolve_single_halo(
     if halo.shape[0] == 0:
         raise ValueError(f"No usable halo rows found in {haloevo_path}")
     mhalo = 10.0 ** (halo[:, 0] - 9.0)
-    redshift_halo = halo[:, 5].astype(float)
+    redshift_halo = halo[:, 1].astype(float)
     bg_time = np.array([Redshift2CosmicAge(z=z, time_unit="Gyr") for z in redshift_halo], dtype=float)
-    spin_norm = np.sqrt(halo[:, 6] ** 2 + halo[:, 7] ** 2 + halo[:, 8] ** 2) * kpc / ReducedH0 * 1.0e3
+    spin_norm = np.sqrt(np.sum(halo[:, 2:5] ** 2, axis=1)) * 1.0e3 / ReducedH0 # kpc(km/s)/h --> pc(km/s)
 
     base_block_edges = np.linspace(0.0, t_end, int(tun.t_div) + 1, dtype=float)
     inventory_edge_times = np.asarray([t for _, t in pending_inventory_targets], dtype=float)
@@ -484,7 +526,7 @@ def evolve_single_halo(
 
     def resolve_current_background_re() -> float:
         nonlocal eff_rad_source_count
-        re_kpc = calcRe(mhalo_1e9msun=masshalo, t_Gyr=t_l_block, j=spin_now)
+        re_kpc = calcRe(Mhalo_1e9Msun=masshalo, t_Gyr=t_l_block, j=spin_now)
         eff_rad_source_count += 1
         check_finite_positive(re_kpc, name="Resolved effective radius in kpc re_kpc")
         return float(re_kpc)
@@ -494,7 +536,7 @@ def evolve_single_halo(
 
     def current_status_for_trace(i: int) -> int:
         if status[i] == STAT_ALIVE and is_wanderer[i]:
-            return STAT_WANDERER
+            return STAT_WANDER
         return int(status[i])
 
     def write_trace_row(i: int, phase: str) -> None:
@@ -624,10 +666,10 @@ def evolve_single_halo(
             delta_nsc = 1.0e5 * stellar_1e5
             final_stellar_mass[i] = delta_nsc
             _deposit_amount(i, 1, stellar_1e5, depo, m_sumbin_total, m_sumgc_total)
-            status[i] = STAT_SUNK
+            status[i] = STAT_SUNK_GC
         else:
             final_stellar_mass[i] = 0.0
-            status[i] = STAT_WANDERER_SUNK
+            status[i] = STAT_SUNK_BH
 
         M_NSC_msun += delta_nsc
         M_SMBH_init_msun += delta_smbh_init
@@ -691,7 +733,7 @@ def evolve_single_halo(
     ) -> Tuple[float, float, float]:
         m_enclose = _enclosed_mass_before_bin_from_prefix(bin_index, prefix_snapshot)
         rho_bg = rho_bg_current_block(r_now)
-        rho_tot = rho_bg + m_enclose / ((4.0 / 3.0) * PI * (float(r_now) ** 3)) / 1.0e4
+        rho_tot = rho_bg + (m_enclose * 1.0e5) / ((4.0 / 3.0) * PI * (float(r_now) ** 3))
         return m_enclose, rho_bg, rho_tot
 
     def current_rdot(
@@ -748,7 +790,7 @@ def evolve_single_halo(
                 if m_imbh[i] > 0.0:
                     enter_wanderer(i, b, deposit_stars=True)
                 else:
-                    status[i] = STAT_TORN
+                    status[i] = STAT_DISRUPT
                     _deposit_full_mass(i, b, m_gc, depo, m_sumbin_total, m_sumgc_total)
                     write_trace_row(i, "prep")
                     return
@@ -813,12 +855,17 @@ def evolve_single_halo(
             t1 = bg_time[snap_pos]
             if t1 == t0:
                 masshalo = float(mhalo[snap_pos - 1])
+                spin_now = float(spin_norm[snap_pos - 1])
             else:
+                interpolation_fraction = (t_l - t0) / (t1 - t0)
                 masshalo = float(
                     mhalo[snap_pos - 1]
-                    + (mhalo[snap_pos] - mhalo[snap_pos - 1]) * (t_l - t0) / (t1 - t0)
+                    + (mhalo[snap_pos] - mhalo[snap_pos - 1]) * interpolation_fraction
                 )
-            spin_now = float(spin_norm[snap_pos - 1])
+                spin_now = float(
+                    spin_norm[snap_pos - 1]
+                    + (spin_norm[snap_pos] - spin_norm[snap_pos - 1]) * interpolation_fraction
+                )
             #state_idx = snap_pos - 1
             #redshift_now = CosmicAge2Redshift(t_l, time_unit="Gyr")
         sersic_re_now = resolve_current_background_re()
@@ -874,7 +921,7 @@ def evolve_single_halo(
                     record_nsc_entry(i, b, float(t_gc[i]))
                 elif m_gc[i] <= 0.0:
                     dt_gc[i] = t_end
-                    status[i] = STAT_EXHAUSTED
+                    status[i] = STAT_DISRUPT
                     m_gc[i] = 0.0
                 else:
                     record_nsc_entry(i, b, float(t_gc[i]))
@@ -886,7 +933,7 @@ def evolve_single_halo(
             else:
                 if m_gc[i] <= 0.0:
                     dt_gc[i] = t_end
-                    status[i] = STAT_EXHAUSTED
+                    status[i] = STAT_DISRUPT
                     m_gc[i] = 0.0
                 elif r_gc[i] <= 0.0:
                     dt_gc[i] = t_end
@@ -903,7 +950,7 @@ def evolve_single_halo(
                             enter_wanderer(i, b, deposit_stars=True)
                             prepare_gc_step(i, prefix_snapshot, t_r)
                         else:
-                            status[i] = STAT_TORN
+                            status[i] = STAT_DISRUPT
                             _deposit_full_mass(i, b, m_gc, depo, m_sumbin_total, m_sumgc_total)
                     else:
                         prepare_gc_step(i, prefix_snapshot, t_r)
@@ -958,7 +1005,7 @@ def evolve_single_halo(
                     record_nsc_entry(i, b, float(t_gc[i]))
                 elif m_gc[i] <= 0.0:
                     dt_gc[i] = t_end
-                    status[i] = STAT_EXHAUSTED
+                    status[i] = STAT_DISRUPT
                     m_gc[i] = 0.0
                 else:
                     record_nsc_entry(i, b, float(t_gc[i]))
@@ -968,7 +1015,7 @@ def evolve_single_halo(
             else:
                 if m_gc[i] <= 0.0:
                     dt_gc[i] = t_end
-                    status[i] = STAT_EXHAUSTED
+                    status[i] = STAT_DISRUPT
                     m_gc[i] = 0.0
                 elif r_gc[i] <= 0.0:
                     dt_gc[i] = t_end
@@ -984,7 +1031,7 @@ def evolve_single_halo(
                         if m_imbh[i] > 0.0:
                             enter_wanderer(i, b, deposit_stars=True)
                         else:
-                            status[i] = STAT_TORN
+                            status[i] = STAT_DISRUPT
                             _deposit_full_mass(i, b, m_gc, depo, m_sumbin_total, m_sumgc_total)
 
             write_trace_row(i, "coarse")
@@ -1023,7 +1070,7 @@ def evolve_single_halo(
     sample_pending_imbh_inventory(t_end)
 
     status_out = status.copy()
-    status_out[(status == STAT_ALIVE) & is_wanderer] = STAT_WANDERER
+    status_out[(status == STAT_ALIVE) & is_wanderer] = STAT_WANDER
     alive_stellar = (status == STAT_ALIVE) & (~is_wanderer)
     final_stellar_mass[alive_stellar] = 1.0e5 * np.maximum(m_gc[alive_stellar] - m_imbh[alive_stellar], 0.0)
     final_stellar_mass = np.maximum(final_stellar_mass, 0.0)
@@ -1038,17 +1085,16 @@ def evolve_single_halo(
                 f"{m_imbh_final[i]:.10e}\n"
             )
 
-    finalGCs_array = np.column_stack((
-        np.arange(1, n_gc + 1, dtype=float),
-        status_out.astype(float),
-        final_stellar_mass,
-        1.0e5 * m_gc_init,
-        t_end - t_gc,
-        t_end - t_gc_init,
-        r_gc,
-        r_gc_init,
-        m_imbh_final,
-    ))
+    finalGCs_array = np.empty((n_gc, 9), dtype=object)
+    finalGCs_array[:, 0] = np.arange(1, n_gc + 1, dtype=np.int64)
+    finalGCs_array[:, 1] = status_out.astype(np.int64)
+    finalGCs_array[:, 2] = final_stellar_mass
+    finalGCs_array[:, 3] = 1.0e5 * m_gc_init
+    finalGCs_array[:, 4] = t_end - t_gc
+    finalGCs_array[:, 5] = t_end - t_gc_init
+    finalGCs_array[:, 6] = r_gc
+    finalGCs_array[:, 7] = r_gc_init
+    finalGCs_array[:, 8] = m_imbh_final
     if trace_fh is not None:
         trace_fh.close()
 

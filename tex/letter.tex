@@ -1,0 +1,787 @@
+%% Beginning of file 'sample701.tex'
+%%
+%% Version 7.0.1. Created May 2025.
+%% Version 7. Created January 2025.
+%%
+%% AASTeX v7+ calls the following external packages:
+%% times, hyperref, ifthen, hyphens, longtable, xcolor,
+%% bookmarks, array, rotating, ulem, and lineno
+%%
+%% RevTeX is no longer used in AASTeX v7+.
+%%
+\documentclass[trackchanges, twocolappendix, twocolumn]{aastex701}
+%%
+%% This initial command takes arguments that can be used to easily modify
+%% the output of the compiled manuscript. Any combination of arguments can be
+%% invoked like this:
+%%
+%% \documentclass[argument1,argument2,argument3,...]{aastex701}
+%%
+%% Six of the arguments are typestting options. They are:
+%%
+%%  twocolumn   : two text columns, 10 point font, single spaced article.
+%%                This is the most compact and represent the final published
+%%                derived PDF copy of the accepted manuscript from the publisher
+%%  default     : one text column, 10 point font, single spaced (default).
+%%  manuscript  : one text column, 12 point font, double spaced article.
+%%  preprint    : one text column, 12 point font, single spaced article.
+%%  preprint2   : two text columns, 12 point font, single spaced article.
+%%  modern      : a stylish, single text column, 12 point font, article with
+%% 		  wider left and right margins. This uses the Daniel
+%% 		  Foreman-Mackey and David Hogg design.
+%%
+%% Note that you can submit to the AAS Journals in any of these 6 styles.
+%%
+%% There are other optional arguments one can invoke to allow other stylistic
+%% actions. The available options are:
+%%
+%%   astrosymb    : Loads Astrosymb font and define \astrocommands.
+%%   tighten      : Makes baselineskip slightly smaller, only works with
+%%                  the twocolumn substyle.
+%%   times        : uses times font instead of the default.
+%%   linenumbers  : turn on linenumbering. Note this is mandatory for AAS
+%%                  Journal submissions and revisions.
+%%   trackchanges : Shows added text in bold.
+%%   longauthor   : Do not use the more compressed footnote style (default) for
+%%                  the author/collaboration/affiliations. Instead print all
+%%                  affiliation information after each name. Creates a much
+%%                  longer author list but may be desirable for short
+%%                  author papers.
+%% twocolappendix : make 2 column appendix.
+%%   anonymous    : Do not show the authors, affiliations, acknowledgments,
+%%                  and author contributions for dual anonymous review.
+%%  resetfootnote : Reset footnotes to 1 in the body of the manuscript.
+%%                  Useful when there are a lot of authors and affiliations
+%%		    in the front matter.
+%%   longbib      : Print article titles in the references. This option
+%% 		    is mandatory for PSJ manuscripts.
+%%
+%% Since v6, AASTeX has included \hyperref support. While we have built in
+%% specific %% defaults into the classfile you can manually override them
+%% with the \hypersetup command. For example,
+%%
+%% \hypersetup{linkcolor=red,citecolor=green,filecolor=cyan,urlcolor=magenta}
+%%
+%% will change the color of the internal links to red, the links to the
+%% bibliography to green, the file links to cyan, and the external links to
+%% magenta. Additional information on \hyperref options can be found here:
+%% https://www.tug.org/applications/hyperref/manual.html#x1-40003
+%%
+%% The "bookmarks" has been changed to "true" in hyperref
+%% to improve the accessibility of the compiled pdf file.
+%%
+%% If you want to create your own macros, you can do so
+%% using \newcommand. Your macros should appear before
+%% the \begin{document} command.
+%%
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{CJK}
+\usepackage{comment}
+\usepackage{graphicx}
+\usepackage{makecell}
+\usepackage{multirow} % multiple rows
+\usepackage{subcaption}
+\usepackage{txfonts} % Times New Roman
+
+\newcommand{\vdag}{(v)^\dagger}
+\newcommand\aastex{AAS\TeX}
+\newcommand\latex{La\TeX}
+
+\newcommand{\czkong}[1]{{\color{magenta}[\textbf{#1}]}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% The following section outlines numerous optional output that
+%% can be displayed in the front matter or as running meta-data.
+%%
+%% Running header information. A short title on odd pages and
+%% short author list on even pages. Note that this
+%% information may be modified in production.
+\shorttitle{\textsc{Arepo-CD}}
+\shortauthors{C. Kong et al.}
+%%
+%% Include dates for submitted, revised, and accepted.
+\received{\today}
+\revised{\today}
+\accepted{\today}
+%%
+%% Indicate AAS Journal the manuscript was submitted to.
+\submitjournal{APJL}
+%% Note that this command adds "Submitted to " the argument.
+%%
+%% You can add a light gray and diagonal water-mark to the first page
+%% with this command:
+%% \watermark{text}
+%% where "text", e.g. DRAFT, is the text to appear.  If the text is
+%% long you can control the water-mark size with:
+%% \setwatermarkfontsize{dimension}
+%% where dimension is any recognized LaTeX dimension, e.g. pt, in, etc.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Use this command to indicate a subdirectory where figures are located.
+%%\graphicspath{{./}{figures/}}
+%% This is the end of the preamble.  Indicate the beginning of the
+%% manuscript itself with \begin{document}.
+
+\begin{document}
+\begin{CJK*}{UTF8}{gbsn}
+
+\title{Compact NSC hosting a smaller BH can explain the observed "naked" massive black hole in a little red dot}
+
+%% A significant change from AASTeX v6+ is in the author blocks. Now an email
+%% address is required for each author. This means that each author requires
+%% at least one of the following:
+%%
+%% \author
+%% \affiliation
+%% \email
+%%
+%% If these three commands are not available for each author, the latex
+%% compiler will issue an error and if you force the latex compiler to continue,
+%% it will generate an incomplete pdf.
+%%
+%% Multiple \affiliation commands are allowed and authors can also include
+%% an optional \altaffiliation to indicate a status, i.e. Hubble Fellow.
+%% while affiliations are indexed as footnotes, altaffiliations are noted with
+%% with a non-numeric footnote that is set away from the numeric \affiliation
+%% footnotes. NOTE that if an \altaffiliation command is used it must
+%% come BEFORE the \affiliation call, right after the \author command, in
+%% order to place the footnotes in the proper location. Because non-numeric
+%% symbols are used, \altaffiliation should be used sparingly.
+%%
+%% In v7+ the \author command takes an optional argument which provides
+%% additional metadata about the author. Authors can provide the 16 digit
+%% ORCID, the surname (family or last) name, the given (first or fore-) name,
+%% and a name suffix, e.g. "Jr.". The syntax is:
+%%
+%% \author[orcid=0000-0002-9072-1121,gname=Gregory,sname=Schwarz]{Greg Schwarz}
+%%
+%% This name metadata in not shown, it is only for parsing by the peer review
+%% system so authors can be more easily identified. This name information will
+%% also be sent to the publisher so they can include it in the CROSSREF
+%% metadata. Including an orcid will hyperlink the author name to the
+%% author's ORCID page. Note that  during compilation, LaTeX will do some
+%% limited checking of the format of the ID to make sure it is valid. If
+%% the "orcid-ID.png" image file is  present or in the LaTeX pathway, the
+%% ORCID icon will appear next to the authors name.
+%%
+%% Even though emails are now required for each author, the \email does not
+%% produce output in the compiled manuscript unless the optional "show" command
+%% is used. For example,
+%%
+%% \email[show]{greg.schwarz@aas.org}
+%%
+%% All "shown" emails are show in the bottom left of the first page. Due to
+%% space constraints, only a few emails should be shown.
+%%
+%% To identify a corresponding author, use the \correspondingauthor command.
+%% The command appends "Corresponding Author: " to the argument it appears at
+%% the bottom left of the first page like the output from \email.
+
+\author[0009-0003-9099-5805,gname=Chuizheng,sname=Kong]{Chuizheng Kong (孔垂政)}
+\affiliation{Department of Astronomy, Tsinghua Univeristy, Beijing, 100084, People's Republic of China}
+\email{kcz24@mails.tsinghua.edu.cn}
+
+\author[0000-0002-1253-2763,gname=Hui,sname=Li]{Hui Li (李辉)}
+\affiliation{Department of Astronomy, Tsinghua Univeristy, Beijing, 100084, People's Republic of China}
+\email[show]{hliastro@tsinghua.edu.cn}
+
+%% Use the \collaboration command to identify collaborations. This command
+%% takes an optional argument that is either a number or the word "all"
+%% which tells the compiler how many of the authors above the command to
+%% show. For example "\collaboration[all]{(DELVE Collaboration)}" wil include
+%% all the authors above this command.
+%%
+%% Mark off the abstract in the ``abstract'' environment.
+\begin{abstract}
+
+\czkong{Add background motivation here. Motivation: still lack a model to test the runaway collision-triggered IMBHs in cosmological context.} We describe the current semi-analytic nuclear-star-cluster (NSC) model used to connect globular cluster (GC) formation, GC orbital evolution, and intermediate-mass black hole (IMBH) seeding. The model paints GC formation onto cosmological halo merger trees, samples individual clusters from a Schechter initial cluster mass function, assigns birth radii from a \cite{Gao+2024GC} S{\'e}rsic spatial model, and evolves the clusters in an analytic, time-dependent galactic background. Stellar mass is removed by stellar evolution, continuous tidal stripping, direct tidal tearing, and dynamical friction-driven sinking. IMBHs are assigned once at cluster birth using a metallicity- and surface-density-dependent runaway-collision fit. If the stellar component of an IMBH-hosting GC is removed before the IMBH reaches the centre, the black hole is evolved as a wandering remnant until it either sinks or remains in the galaxy. \czkong{Too many details about the methods. Also lack results and conclusions.}
+
+\end{abstract}
+
+%% Keywords should appear after the \end{abstract} command.
+%% The AAS Journals now uses Unified Astronomy Thesaurus (UAT) concepts:
+%% https://astrothesaurus.org
+%% You will be asked to selected these concepts during the submission process
+%% but this old "keyword" functionality is maintained in case authors want
+%% to include these concepts in their preprints.
+%%
+%% You can use the \uat command to link your UAT concepts back its source.
+\keywords{\uat{Galaxies}{573} --- \uat{Cosmology}{343} --- \uat{High Energy astrophysics}{739} --- \uat{Interstellar medium}{847} --- \uat{Stellar astronomy}{1583} --- \uat{Solar physics}{1476}}
+
+%% From the front matter, we move on to the body of the paper.
+%% Sections are demarcated by \section and \subsection, respectively.
+%% Observe the use of the LaTeX \label
+%% command after the \subsection to give a symbolic KEY to the
+%% subsection for cross-referencing in a \ref command.
+%% You can use LaTeX's \ref and \label commands to keep track of
+%% cross-references to sections, equations, tables, and figures.
+%% That way, if you change the order of any elements, LaTeX will
+%% automatically renumber them.
+
+\section{Introduction}
+\label{sec:intro}
+
+The discovery of massive black holes (BHs) during the first billion years of
+cosmic history places strong constraints on the origin and early growth of
+black-hole seeds. The problem is especially sharp for faint high-redshift
+active galactic nuclei (AGN), whose inferred black-hole masses can be large
+compared with the stellar masses of their young host galaxies. In this regime,
+the ratio $M_{\bullet}/M_\star$ may provide a more sensitive diagnostic of
+early black-hole assembly than $M_{\bullet}$ alone.
+
+Abell 2744-QSO1 (hereafter QSO1) is an unusually informative example. It was
+first identified in the JWST UNCOVER imaging as an extremely compact, red,
+triply imaged source with a photometric redshift near $z_{\rm phot}\simeq7.6$
+and an effective radius below roughly $35~{\rm pc}$
+\citep{Furtak2023}. Follow-up NIRSpec spectroscopy established a redshift of
+$z=7.045$ and detected broad Balmer emission, identifying QSO1 as a reddened
+AGN and giving a single-epoch virial black-hole mass of order
+$4\times10^7~M_\odot$ \citep{Furtak2024}. The interpretation of its continuum
+and compact stellar component has remained non-unique: conventional
+stellar-plus-AGN spectral-energy-distribution models do not provide a fully
+satisfactory description of the source \citep{Ma2025}, while high-resolution
+spectroscopy indicates that dense gas can produce the Balmer-break features
+without requiring an evolved stellar population to dominate the optical
+continuum \citep{Ji2025}. Independent variability between the multiply imaged
+versions further supports the presence of a compact AGN component
+\citep{Furtak2025}.
+
+The subsequent observations have made QSO1 an important test case for seed
+formation. Balmer-line absorption and the very narrow narrow-line component
+provide additional evidence for a compact, dynamically unusual nucleus
+\citep{DEugenio2025}. The gas surrounding QSO1 is also inferred to be nearly
+pristine, with a metallicity below approximately $10^{-2}Z_\odot$, which is
+difficult to obtain in many conventional early-galaxy growth scenarios
+\citep{Maiolino2025_QSO1}. Motivated by these properties, cosmological
+simulations seeded with a massive primordial BH have shown that feedback,
+bursty star formation, enriched outflows, and continuing pristine inflow can
+produce systems with both very low metallicity and extreme
+$M_{\rm BH}/M_\star$ ratios \citep{Zhang2025_hydrosim_QSO1}.
+
+The direct dynamical analysis of QSO1 now provides the strongest constraint.
+Its spectroastrometric and two-dimensional kinematic modelling favours a
+point-mass interpretation with
+$\log_{10}(M_{\rm BH}/M_\odot)=7.7\pm0.3$, while leaving
+$M_\star<2\times10^7~M_\odot$ inside the relevant central region
+\citep{Juodzbalis2025_QSO1}. Thus QSO1 may be a nearly naked, black-hole
+dominated nucleus, and its inferred black-hole-to-stellar mass ratio exceeds
+two. This result is qualitatively different from the earlier question of
+whether a compact stellar system could reproduce the lower-resolution or
+point-mass kinematic comparison.
+
+Here we ask that latter question in a controlled way. Can a nuclear star
+cluster assembled by globular-cluster (GC) inspiral produce a compact stellar
+component with the UV luminosity and velocity scale associated with QSO1,
+while containing a much smaller embedded BH formed through intermediate-mass
+black-hole (IMBH) delivery? We do not reinterpret the direct QSO1 measurement,
+and we do not claim that the model reproduces its
+$\simeq5\times10^7~M_\odot$ BH. Instead, we use QSO1 as a case study for the
+stage of evolution in which a GC-origin nuclear stellar component has already
+assembled but the central BH has not yet become dynamically dominant.
+
+\section{Methods} \label{sect:method}
+
+\subsection{Cosmological GC-BH Formation \& Evolution Model} \label{subsect:model}
+
+\subsection{Rotation Curve} \label{subsect:rot_curve}
+
+We compare the model with QSO1 at $z = 7.04$ \citep{Furtak+2023A2744-QSO1, Furtak+2024A2744-QSO1, DEugenio+2026A2744-QSO1}. For each candidate halo, the deposited stellar profile and central BH mass are evaluated at the corresponding model output time. The model velocity profile is calculated from the enclosed deposited stellar mass plus the model central BH,
+\begin{align}
+v_{\rm model} (r) & = \pm \sqrt{\dfrac{G}{r} \left[ M_\bullet + \left( M_{\star, \rm dep} + M_{\rm NFW} + M_{\star, \rm S} \right) (< r) \right]} \sin i ,
+\label{eq:v_model}
+\end{align}
+where $i = 52^\circ$ is the inclination angle. and is compared with the resolved-kinematic and spectroastrometric points
+compiled from the QSO1 analysis in \cite{Juodzbalis+2026SMBH}. We denote the weighted kinematic residual implemented by the plotting pipeline as $S_{\rm Kep}$.
+
+\subsection{Rest-frame UV magnitude of the GC-origin stellar component} \label{subsect:UVmag}
+
+The second observable is the rest-frame $1500~\mathring{\mathrm{A}}$ absolute magnitude of the
+GC-origin stellar component. We select GCs that have reached the nuclear
+region before the QSO1 epoch, assign each one an age and its formation
+metallicity, and interpolate a MIST/Chabrier simple-stellar-population table.
+The luminosity-weighted composite magnitude is then scaled by the initially
+formed stellar mass inside $R_{\rm UV}=6~{\rm pc}$,
+\begin{align}
+M_{\rm UV}
+&=m_{1500,{\rm comp}}
+-2.5\log_{10}\left[\frac{M_{\star,{\rm form}}(<R_{\rm UV})}{M_\odot}\right].
+\label{eq:muv}
+\end{align}
+This is a pure-stellar estimate. It excludes AGN light, dust attenuation,
+nebular emission, reprocessed radiation, and in-situ young stars. We adopt
+$M_{{\rm UV},{\rm QSO1}}=-15.60$ and define
+\begin{align}
+S_{\rm UV}
+&=\frac{M_{\rm UV}-M_{{\rm UV},{\rm QSO1}}}{0.5~{\rm mag}},
+\\
+S_{\rm joint}
+&=\left(S_{\rm Kep}^2+S_{\rm UV}^2\right)^{1/2}.
+\label{eq:qso1_score}
+\end{align}
+The two terms have equal weight. This statistic is a descriptive analogue
+selector rather than a likelihood and, importantly, it does not force the
+model central BH to equal the direct QSO1 mass.
+
+We estimate the rest-frame UV luminosity of the compact stellar component
+assembled through globular-cluster (GC) inspiral in order to compare the
+model with A2744-QSO1. This calculation is a forward estimate of the
+intrinsic stellar continuum. It is not intended to reproduce the complete
+observed spectral energy distribution of QSO1, which may contain additional
+contributions from the active galactic nucleus, reprocessed emission, dust,
+nebular emission, and other non-stellar sources.
+
+For the QSO1 comparison, we use the GC-origin stellar material that has
+reached the nuclear region by the evaluation epoch. The UV aperture is fixed
+at
+\begin{align}
+R_{\rm UV}=6~{\rm pc}.
+\end{align}
+The corresponding stellar mass is the initially formed stellar mass deposited
+within this aperture,
+\begin{align}
+M_{\star,{\rm form}}(<R_{\rm UV})
+ =
+ \sum_{i\in{\rm nuc}}
+ M_{{\star,{\rm form}},i}(<R_{\rm UV}),
+\end{align}
+where the sum includes only the GC contributors identified by the dynamical
+model as having reached the nuclear region before the QSO1 epoch. This is an
+initially formed mass and should not be confused with the surviving stellar
+mass after stellar evolution.
+
+For each contributing GC, we assign a stellar-population age
+\begin{align}
+\tau_i=t(z_{\rm eval})-t_{{\rm form},i},
+\end{align}
+where \(t_{{\rm form},i}\) is the formation time of the GC and
+\(z_{\rm eval}\simeq7\) is the model evaluation redshift. The observed source
+redshift is \(z_{\rm QSO1}=7.04\); the model diagnostic is evaluated at the
+nearest available \(z=7\) epoch, while the QSO1 redshift is used for the
+selection and comparison bookkeeping. Each contributor is also assigned its
+formation metallicity \([\mathrm{Fe/H}]_i\).
+
+We convert the age--metallicity distribution into UV luminosity using a
+single-stellar-population calibration,
+\begin{align}
+m_{1500,i}
+ =
+m_{1500}\!\left(\tau_i,[\mathrm{Fe/H}]_i\right),
+\end{align}
+tabulated for a MIST stellar-evolution model and a Chabrier initial mass
+function. The tabulated quantity is the absolute AB magnitude at
+\(1500~\mathring{\mathrm{A}}\) per \(1\,M_\odot\) of initially formed stars.
+We interpolate linearly in \(\log_{10}\tau\) and in \([\mathrm{Fe/H}]\). If a
+model population lies outside the calibration range, its age or metallicity
+is clipped to the nearest tabulated boundary rather than extrapolated.
+
+Because magnitudes are logarithmic, the population contributions are combined
+in luminosity space. Defining
+\begin{align}
+q_i=10^{-0.4m_{1500,i}},
+\end{align}
+we calculate the luminosity per unit initially formed stellar mass as
+\begin{align}
+q_{\rm comp}
+ =
+ \frac{\displaystyle\sum_i w_i q_i}
+      {\displaystyle\sum_i w_i},
+\end{align}
+where \(w_i\) is the stellar-mass weight of contributor \(i\), chosen to
+trace its deposited stellar mass in the nuclear component. When a final
+deposited mass is unavailable, the corresponding initially formed mass is
+used. The composite magnitude per unit initially formed mass is therefore
+\begin{align}
+m_{1500,{\rm comp}}
+ =
+ -2.5\log_{10}\left(q_{\rm comp}\right).
+\end{align}
+
+The predicted intrinsic stellar UV magnitude within the aperture is then
+\begin{align}
+M_{\rm UV}
+ =
+ m_{1500,{\rm comp}}
+ -
+ 2.5\log_{10}
+ \left[
+ \frac{M_{\star,{\rm form}}(<R_{\rm UV})}{M_\odot}
+ \right].
+\label{eq:muv_model}
+\end{align}
+This quantity includes only the UV emission associated with the GC-origin
+stellar population. In particular, we do not add AGN continuum emission,
+AGN-reprocessed light, nebular emission, dust corrections, intergalactic
+absorption, X-ray binaries, or stars formed in situ in the nuclear region.
+
+For the QSO1 consistency test, we adopt
+\begin{align}
+M_{{\rm UV},{\rm QSO1}}=-15.60
+\end{align}
+and define the UV residual
+\begin{align}
+S_{\rm UV}
+ =
+ \frac{M_{\rm UV}-M_{{\rm UV},{\rm QSO1}}}
+      {\sigma_{\rm UV}},
+ \qquad
+ \sigma_{\rm UV}=0.5~{\rm mag}.
+\label{eq:suv}
+\end{align}
+The UV constraint is used as an independent consistency filter on the compact
+GC-inspiral model. It should therefore be interpreted as a comparison of the
+predicted stellar component with the observed QSO1 UV magnitude, rather than
+as a full fit to the source spectrum.
+
+\subsection{Gas-phase metallicity comparison}
+\label{subsec:metallicity}
+
+The GC model assigns each cluster a formation iron abundance according to the
+galactic gas-phase mass--metallicity relation of \citet{Chen&Gnedin2024aGC},
+\begin{align}
+[{\rm Fe/H}]_{\rm gas} = 0.3 \log_{10} \left( \dfrac{M_\star}{10^9~M_\odot} \right) - \log_{10} (1 + z) - 0.5 ,
+\label{eq:MMR}
+\end{align}
+with the galaxy-scale abundance capped at $[{\rm Fe/H}]_{\rm gas} = 0.3$. Individual GCs are assigned a scatter around this relation,
+\begin{align}
+[\mathrm{Fe/H}]_i
+ =
+ [\mathrm{Fe/H}]_{\rm gal}+\xi_i,
+ \qquad
+ \xi_i\sim\mathcal{N}(0,0.3^2).
+\end{align}
+Here, $[\mathrm{Fe/H}]_i$ describes the abundance inherited by the stellar
+population of GC $i$ and is not directly equivalent to the gas-phase
+metallicity measured for A2744-QSO1.
+
+To compare the model with the nebular abundance inferred for QSO1, we convert
+the modelled iron abundance into an oxygen abundance. Following \citet{Chen&Gnedin2024aGC}, we adopt
+\begin{align}
+[{\rm O/Fe}]_i = 0.37 - 0.17[{\rm Fe/H}]_i
+\end{align}
+and \czkong{Ref here.}
+\begin{align}
+12+\log_{10}(\mathrm{O/H})_\odot=8.69.
+\end{align}
+The resulting conversion is
+\begin{align}
+[{\rm Fe/H}]_i = 1.2 \log_{10} ({\rm O/H})_i + 3.48 .
+\end{align}
+We then define the oxygen abundance relative to solar as
+\begin{align}
+[{\rm O/H}]_i & \equiv \log_{10} \left( \dfrac{Z_i}{Z_\odot} \right)_{\rm O} = \log_{10} ({\rm O/H})_i - \log_{10} ({\rm O/H})_\odot \\
+& = \log_{10}(\mathrm{O/H})_i + 3.31 .
+\label{eq:oh_model}
+\end{align}
+
+For the compact nuclear component, we combine the abundances of the GC
+contributors that have reached the central aperture
+$R_{\rm UV}=6~{\rm pc}$. Using the deposited initially formed stellar mass
+$w_i$ of each contributor as the weight, we calculate the abundance in linear
+oxygen units,
+\begin{align}
+[\mathrm{O/H}]_{\rm nuc}
+ =
+ \log_{10}\left[
+ \frac{\displaystyle\sum_{i\in{\cal C}_{\rm nuc}}
+ w_i\,10^{[\mathrm{O/H}]_i}}
+ {\displaystyle\sum_{i\in{\cal C}_{\rm nuc}}w_i}
+ \right],
+\label{eq:nuclear_oh}
+\end{align}
+where ${\cal C}_{\rm nuc}$ denotes the set of GC-origin contributors within
+the nuclear component. This quantity is interpreted as a mass-weighted
+nuclear oxygen-abundance proxy. It connects the metallicity of the gas from
+which the GCs formed to the present-day gas measured through the QSO1 narrow
+emission lines.
+
+The QSO1 abundance is inferred from the narrow
+[\textsc{Oiii}]$\lambda 5007$/H$\beta$ ratio. Within the central $\lesssim 150~{\rm pc}$, \citet{Maiolino+2026A2744-QSO1} report
+\begin{align}
+[\mathrm{O/H}]_{\rm QSO1} & \equiv \log_{10} \left( \dfrac{Z_{\rm QSO1}}{Z_\odot} \right)_{\rm O} = - 2.32^{+ 0.09}_{- 0.12} ,
+\label{eq:qso1_central_metallicity}
+\end{align}
+while the $150$--$300~{\rm pc}$ annulus gives
+\begin{align}
+\log_{10} \left( \dfrac{Z_{\rm QSO1}}{Z_\odot} \right)_{\rm O} < -2.41 .
+\label{eq:qso1_outer_metallicity}
+\end{align}
+We compare the modelled nuclear proxy in equation~\eqref{eq:nuclear_oh}
+primarily with the central QSO1 value. Since the current model follows the
+compact stellar component rather than spatially resolved nuclear gas, it does
+not provide an independent prediction for the outer annulus.
+
+For reference, applying the Chen--Gnedin conversion formally to the central
+QSO1 value gives
+\begin{align}
+[{\rm Fe/H}]_{\rm QSO1} & = 1.2 \log_{10} ({\rm O/H})_{\rm QSO1} + 3.48 \notag \\
+& = 1.2 \left( [{\rm O/H}]_{\rm QSO1} - 3.31 \right) + 3.48 \notag \\
+& = -3.276 .
+\end{align}
+This value lies below the approximate
+$-2\lesssim[\mathrm{Fe/H}]\lesssim0$ range over which the adopted
+$[\mathrm{O/Fe}]$ relation was calibrated. We therefore use oxygen abundance
+as the primary comparison and treat the corresponding
+$[{\rm Fe/H}]_{\rm QSO1}$ only as an extrapolated reference, not as
+a direct measurement of the iron abundance in QSO1.
+
+The scaled-solar relation
+$Z/Z_\odot=10^{[\mathrm{Fe/H}]}$ used for stellar-population bookkeeping is
+not applied to this comparison.
+
+\section{Results}
+\label{sec:results}
+
+\subsection{A compact GC-built analogue of QSO1}
+\label{subsec:qso1_result}
+
+Applying the joint UV--kinematic score to the eligible TNG50 haloes at
+$z\simeq7$ selects halo \texttt{221}. Its lowest finite score is
+$S_{\rm joint}=1.244$, with $S_{\rm Kep}=1.214$ and
+$S_{\rm UV}=0.271$. The selected line-of-sight velocity profile reaches
+$48.6~{\rm km~s^{-1}}$ at $12.5~{\rm pc}$,
+$24.3~{\rm km~s^{-1}}$ at $50~{\rm pc}$, and
+$14.0~{\rm km~s^{-1}}$ at $150~{\rm pc}$.
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=\linewidth]{fig/Fig.02_RotationCurve.pdf}
+\caption{Velocity-profile comparison for the QSO1 case study. The black
+curve is the point-mass comparison used for the QSO1 kinematic diagnostic,
+with $\log_{10}(M_{\rm BH}/M_\odot)=6.75$; the grey dash-dotted curve is a
+Milky-Way-like NSC comparison. The green band shows the 16th--84th percentile
+range of eligible model profiles, and the red curve is the selected halo
+\texttt{221}. The model curve is generated from deposited GC-origin stars plus
+the model central BH.}
+\label{fig:qso1_velocity}
+\end{figure}
+
+At $z=7$, halo \texttt{221} contains an evolved deposited stellar mass of
+\begin{align}
+M_{\rm NSC}(<6~{\rm pc})&=6.72\times10^6~M_\odot,
+\\
+M_\bullet&=2.12\times10^4~M_\odot.
+\label{eq:halo221_masses}
+\end{align}
+The deposited stellar mass is approximately
+$6.85\times10^6~M_\odot$ over the $12.5$--$150~{\rm pc}$ range used in the
+velocity comparison. The model BH therefore contributes only about
+$0.3$ per cent of the enclosed mass in this region. The predicted velocity
+amplitude is consequently controlled by the compact stellar component, with
+the central BH providing only a small embedded contribution.
+
+The selected halo also has a GC-origin pure-stellar UV magnitude of
+$M_{\rm UV}=-15.46$ over the $1$--$7~{\rm pc}$ aperture range, only
+$0.14$ mag fainter than the adopted QSO1 value. The UV agreement is useful as
+a consistency check on the amount and age distribution of deposited stars, but
+it is not a full spectral fit because the calculation omits AGN, dust, nebular,
+and in-situ stellar emission.
+
+\subsection{The model mass is distinct from the direct QSO1 BH mass}
+\label{subsec:mass_comparison}
+
+The central BH in halo \texttt{221} has
+$\log_{10}(M_\bullet/M_\odot)=4.33$, whereas the direct QSO1 analysis gives
+$\log_{10}(M_{\rm BH}/M_\odot)=7.7\pm0.3$ \citep{Juodzbalis2025_QSO1}.
+The model central BH is therefore approximately $2.4\times10^3$ times less
+massive than the observed direct estimate. This is not a numerical failure of
+the velocity calculation hidden by the UV selection: it is the defining
+physical difference between the two interpretations.
+
+\begin{figure}[htbp!]
+\centering
+\includegraphics[width=\linewidth]{fig/Fig.04_BHmasses.pdf}
+\caption{Mass comparison for the QSO1 case study. The shaded band marks the
+direct MOKA3D QSO1 black-hole estimate, while the model markers show the
+deposited stellar mass inside $6~{\rm pc}$ and the central BH mass of halo
+\texttt{221}. The model markers describe a compact GC-delivered stellar
+component with an embedded BH; they are not a fit to the larger direct QSO1
+black-hole mass.}
+\label{fig:qso1_masses}
+\end{figure}
+
+The result should therefore be read as follows. The GC--NSC channel can
+assemble several million solar masses of compact stellar material and deliver
+an IMBH to the centre by $z\simeq7$. That object can reproduce the adopted
+pure-stellar UV scale and the lower-mass point-mass velocity comparison. It
+does not, however, provide the $\sim5\times10^7~M_\odot$ central BH required
+by the direct QSO1 dynamical measurement. Under the present assumptions,
+halo \texttt{221} is a compact NSC with an embedded BH, not a BH-dominated
+analogue of the observed source.
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{What the QSO1 analogue demonstrates}
+\label{subsec:interpretation}
+
+This case study illustrates a distinct evolutionary possibility for early
+black-hole systems. Rapid halo growth produces dense GCs; their inspiral and
+disruption build a compact stellar component, while runaway collisions in a
+subset of the clusters provide IMBH seeds. By $z\simeq7$, the stellar part of
+this channel can already contain several $10^6~M_\odot$ inside a few parsecs,
+even when only a small fraction of the delivered BH mass has reached the
+central sink. The resulting nucleus is naturally an embedded-BH system rather
+than a nucleus whose dynamics are dominated by the BH.
+
+The comparison is nevertheless deliberately weaker than the direct QSO1
+constraint. The selected halo was ranked using a point-mass-style kinematic
+residual and a pure-stellar UV consistency term. It was not fitted to the full
+two-dimensional velocity field, the spectroastrometric transfer function, the
+AGN continuum, or the direct MOKA3D likelihood. The fact that the model stellar
+component can pass this analogue test should therefore not be taken as evidence
+against the conclusion that the observed QSO1 nucleus is BH dominated. Rather,
+it identifies a compact GC-built configuration that can be used as a physically
+motivated comparison model when interpreting lower-resolution data or earlier
+stages of QSO1-like systems.
+
+\subsection{Model limitations and tests}
+\label{subsec:limitations}
+
+Several limitations matter for a quantitative comparison. First, the orbital
+evolution occurs in an analytic, spherically averaged background. The model
+does not follow live gas dynamics, non-axisymmetric torques, or the response of
+the host to AGN feedback. These effects could change both the delivery rate of
+IMBHs and the final central stellar profile. Secondly, the IMBH prescription
+assigns the seed mass at GC birth and does not include BH--BH mergers or
+accretion by non-central IMBHs. The central Eddington prescription is therefore
+a bookkeeping model for the nuclear BH state, not a self-consistent accretion
+calculation.
+
+The stellar comparison is also intentionally incomplete. The predicted
+$M_{\rm UV}$ comes only from initially formed GC-origin stars inside a small
+aperture. It excludes AGN light, attenuation, nebular emission, and any
+in-situ nuclear population. In addition, $M_{\rm NSC}$ is the evolved deposited
+mass inside $6~{\rm pc}$, so it should not be identified automatically with the
+total host stellar mass constrained observationally for QSO1. The choice of
+minimum GC mass, the runaway-collision fit, the birth-radius prescription,
+and the unresolved low-mass progenitors of the cosmological trees should all
+be varied before drawing a population-level conclusion.
+
+The most direct next test is therefore not to increase the analogue score's
+complexity, but to compare the GC-built nuclei with the full QSO1 kinematic
+likelihood using the same spatially resolved observables as the direct
+analysis. If the measured central mass remains close to
+$5\times10^7~M_\odot$, the GC--NSC channel considered here would need an
+additional rapid central-growth phase or a different seed prescription to
+explain QSO1 itself. If instead the data allow a substantial compact stellar
+component, the model provides a concrete route for connecting that component
+to IMBH formation in dense, metal-poor GCs.
+
+\section{Conclusions}
+\label{sec:conclusions}
+
+We have presented a QSO1-only application of a semi-analytic
+GC--NSC--IMBH model. The main conclusions are:
+
+\begin{enumerate}
+\item The model selects TNG50 halo \texttt{221} as a good joint match to the
+      adopted QSO1 velocity and pure-stellar UV diagnostics, with
+      $S_{\rm joint}=1.244$.
+\item At $z\simeq7$, the selected halo contains
+      $6.72\times10^6~M_\odot$ of deposited GC-origin stars inside $6~{\rm pc}$
+      and a central BH of only $2.12\times10^4~M_\odot$. Its dynamics are
+      therefore stellar dominated, while its pure-stellar UV magnitude,
+      $M_{\rm UV}=-15.46$, is close to the adopted QSO1 value.
+\item This compact NSC interpretation is not a replacement for the direct
+      QSO1 result. The model BH is roughly $2.4\times10^3$ times less massive
+      than the direct estimate of $\sim5\times10^7~M_\odot$ and cannot reproduce
+      a nearly naked, BH-dominated nucleus without an additional growth phase.
+\end{enumerate}
+
+The QSO1 case therefore motivates a clear separation between two questions:
+whether GC inspiral can build a compact stellar nucleus and deliver an IMBH at
+very high redshift, and whether that channel alone can account for the direct
+mass measured in QSO1. The present calculation answers the first question
+positively for one illustrative halo, while leaving the second question open
+to a dedicated comparison with the full spatially resolved observations.
+
+%% Please use the acknowledgment and contribution environments. This will
+%% be anonomyized when the "anonymous" style option is used.
+\begin{acknowledgments}
+We thank all the people that have made this AASTeX what it is today. CK is grateful to Houyi Sun, Huan Yang, Yingtian Chen and Oleg Y. Gnedin for useful discussions. This
+includes but not limited to Bob Hanisch, Chris Biemesderfer, Lee Brotzman,
+Pierre Landau, Arthur Ogawa, Maxim Markevitch, Alexey Vikhlinin and Amy
+Hendrickson. Also special thanks to David Hogg and Daniel Foreman-Mackey
+for the new {\tt\string modern} style design. Considerable help was provided via bug
+reports and hacks from numerous people including Patricio Cubillos, Alex
+Drlica-Wagner, Sean Lake, Michele Bannister, Peter Williams, Jonathan
+Gagne, Arthur Adams, Nicholas Wogan, Aaron Pearlman, Jeff Mangum, Mark Durre, Joel Ong, and Stephen Thorp.
+\end{acknowledgments}
+
+%\begin{contribution}
+%%This section gives authors the space to recognize author contributions. The text inside this environment is NOT counted towards the total word quanta. At a minimum, manuscripts are expected to include this text:
+
+%All authors contributed equally to the Terra Mater collaboration.
+
+%% But authors are expected to provide more specific details, e.g.
+%%
+%%SC was responsible for writing and submitting the manuscript.
+%%WWM came up with the initial research concept and edited the manuscript.
+%%OTS obtained the funding and edited the manuscript.
+%%EBF provided the formal analysis and validation. He also edited the manuscript.
+%%GEH Supervised the undergraduates, wrote the software and administers the project github and Zenodo repositories.
+%%
+%% Authors can use the Contributor Role Taxonomy (CRediT) at
+%% https://credit.niso.org
+%% for ideas on how write a good statement tailored to their needs.
+
+%\end{contribution}
+
+%% To help institutions obtain information on the effectiveness of their
+%% telescopes the AAS Journals has created a group of keywords for telescope
+%% facilities.
+%
+%% Following the acknowledgments section, use the following syntax and the
+%% \facility{} or \facilities{} macros to list the keywords of facilities used
+%% in the research for the paper.  Each keyword is check against the master
+%% list during copy editing.  Individual instruments can be provided in
+%% parentheses, after the keyword, but they are not verified.
+%\facilities{HST(STIS), Swift(XRT and UVOT), AAVSO, CTIO:1.3m, CTIO:1.5m, CXO}
+
+%% Similar to \facility{}, there is the optional \software command to allow
+%% authors a place to specify which programs were used during the creation of
+%% the manuscript. Authors should list each code and include either a
+%% citation or url to the code inside ()s when available.
+\software{astropy \citep{2013A&A...558A..33A,2018AJ....156..123A,2022ApJ...935..167A},
+          Cloudy \citep{2013RMxAA..49..137F},
+          Source Extractor \citep{1996A&AS..117..393B}
+          }
+
+%% Appendix material should be preceded with a single \appendix command.
+%% There should be a \section command for each appendix. Mark appendix
+%% subsections with the same markup you use in the main body of the paper.
+%%
+%% Each Appendix (indicated with \section) will be lettered A, B, C, etc.
+%% The equation counter will reset when it encounters the \appendix
+%% command and will number appendix equations (A1), (A2), etc. The
+%% Figure and Table counter will not reset.
+
+\appendix
+
+%% For this sample we use BibTeX plus aasjournalv7.bst to generate the
+%% the bibliography. The sample7.bib file was populated from ADS. To
+%% get the citations to show in the compiled file do the following:
+%%
+%% pdflatex sample7.tex
+%% bibtext sample7
+%% pdflatex sample7.tex
+%% pdflatex sample7.tex
+
+\bibliography{ref}{}
+\bibliographystyle{aasjournalv7}
+
+%% This command is needed to show the entire author+affiliation list when
+%% the collaboration and author truncation commands are used.  It has to
+%% go at the end of the manuscript.
+%\allauthors
+
+%% Include this line if you are using the \added, \replaced, \deleted
+%% commands to see a summary list of all changes at the end of the article.
+%\listofchanges
+
+\end{CJK*}
+\end{document}
+
+% End of file `sample7.tex'.

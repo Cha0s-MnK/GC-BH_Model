@@ -1,0 +1,936 @@
+%% Beginning of file 'sample701.tex'
+%%
+%% Version 7.0.1. Created May 2025.
+%% Version 7. Created January 2025.
+%%
+%% AASTeX v7+ calls the following external packages:
+%% times, hyperref, ifthen, hyphens, longtable, xcolor,
+%% bookmarks, array, rotating, ulem, and lineno
+%%
+%% RevTeX is no longer used in AASTeX v7+.
+%%
+\documentclass[trackchanges, twocolappendix, twocolumn]{aastex701}
+%%
+%% This initial command takes arguments that can be used to easily modify
+%% the output of the compiled manuscript. Any combination of arguments can be
+%% invoked like this:
+%%
+%% \documentclass[argument1,argument2,argument3,...]{aastex701}
+%%
+%% Six of the arguments are typestting options. They are:
+%%
+%%  twocolumn   : two text columns, 10 point font, single spaced article.
+%%                This is the most compact and represent the final published
+%%                derived PDF copy of the accepted manuscript from the publisher
+%%  default     : one text column, 10 point font, single spaced (default).
+%%  manuscript  : one text column, 12 point font, double spaced article.
+%%  preprint    : one text column, 12 point font, single spaced article.
+%%  preprint2   : two text columns, 12 point font, single spaced article.
+%%  modern      : a stylish, single text column, 12 point font, article with
+%% 		  wider left and right margins. This uses the Daniel
+%% 		  Foreman-Mackey and David Hogg design.
+%%
+%% Note that you can submit to the AAS Journals in any of these 6 styles.
+%%
+%% There are other optional arguments one can invoke to allow other stylistic
+%% actions. The available options are:
+%%
+%%   astrosymb    : Loads Astrosymb font and define \astrocommands.
+%%   tighten      : Makes baselineskip slightly smaller, only works with
+%%                  the twocolumn substyle.
+%%   times        : uses times font instead of the default.
+%%   linenumbers  : turn on linenumbering. Note this is mandatory for AAS
+%%                  Journal submissions and revisions.
+%%   trackchanges : Shows added text in bold.
+%%   longauthor   : Do not use the more compressed footnote style (default) for
+%%                  the author/collaboration/affiliations. Instead print all
+%%                  affiliation information after each name. Creates a much
+%%                  longer author list but may be desirable for short
+%%                  author papers.
+%% twocolappendix : make 2 column appendix.
+%%   anonymous    : Do not show the authors, affiliations, acknowledgments,
+%%                  and author contributions for dual anonymous review.
+%%  resetfootnote : Reset footnotes to 1 in the body of the manuscript.
+%%                  Useful when there are a lot of authors and affiliations
+%%		    in the front matter.
+%%   longbib      : Print article titles in the references. This option
+%% 		    is mandatory for PSJ manuscripts.
+%%
+%% Since v6, AASTeX has included \hyperref support. While we have built in
+%% specific %% defaults into the classfile you can manually override them
+%% with the \hypersetup command. For example,
+%%
+%% \hypersetup{linkcolor=red,citecolor=green,filecolor=cyan,urlcolor=magenta}
+%%
+%% will change the color of the internal links to red, the links to the
+%% bibliography to green, the file links to cyan, and the external links to
+%% magenta. Additional information on \hyperref options can be found here:
+%% https://www.tug.org/applications/hyperref/manual.html#x1-40003
+%%
+%% The "bookmarks" has been changed to "true" in hyperref
+%% to improve the accessibility of the compiled pdf file.
+%%
+%% If you want to create your own macros, you can do so
+%% using \newcommand. Your macros should appear before
+%% the \begin{document} command.
+%%
+\usepackage{amsmath}
+\usepackage{bm}
+\usepackage{booktabs} % table
+\usepackage{CJK}
+\usepackage{comment}
+\usepackage{graphicx} % table
+\usepackage{makecell}
+\usepackage{multirow} % multiple rows
+\usepackage{subcaption}
+\usepackage{txfonts} % Times New Roman
+
+\newcommand{\vdag}{(v)^\dagger}
+\newcommand\aastex{AAS\TeX}
+\newcommand\latex{La\TeX}
+
+\newcommand{\czkong}[1]{{\color{magenta}[\textbf{#1}]}}
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% The following section outlines numerous optional output that
+%% can be displayed in the front matter or as running meta-data.
+%%
+%% Running header information. A short title on odd pages and
+%% short author list on even pages. Note that this
+%% information may be modified in production.
+\shorttitle{GC-BH Model}
+\shortauthors{C. Kong et al.}
+%%
+%% Include dates for submitted, revised, and accepted.
+\received{\today}
+\revised{\today}
+\accepted{\today}
+%%
+%% Indicate AAS Journal the manuscript was submitted to.
+\submitjournal{APJ}
+%% Note that this command adds "Submitted to " the argument.
+%%
+%% You can add a light gray and diagonal water-mark to the first page
+%% with this command:
+%% \watermark{text}
+%% where "text", e.g. DRAFT, is the text to appear.  If the text is
+%% long you can control the water-mark size with:
+%% \setwatermarkfontsize{dimension}
+%% where dimension is any recognized LaTeX dimension, e.g. pt, in, etc.
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%
+%% Use this command to indicate a subdirectory where figures are located.
+%%\graphicspath{{./}{figures/}}
+%% This is the end of the preamble.  Indicate the beginning of the
+%% manuscript itself with \begin{document}.
+
+\begin{document}
+\begin{CJK*}{UTF8}{gbsn}
+
+\title{Connecting Intermediate-Mass Black Holes Formed in Proto-Globular Clusters to High Redshift Supermassive Black Hole Seeds}
+
+%% A significant change from AASTeX v6+ is in the author blocks. Now an email
+%% address is required for each author. This means that each author requires
+%% at least one of the following:
+%%
+%% \author
+%% \affiliation
+%% \email
+%%
+%% If these three commands are not available for each author, the latex
+%% compiler will issue an error and if you force the latex compiler to continue,
+%% it will generate an incomplete pdf.
+%%
+%% Multiple \affiliation commands are allowed and authors can also include
+%% an optional \altaffiliation to indicate a status, i.e. Hubble Fellow.
+%% while affiliations are indexed as footnotes, altaffiliations are noted with
+%% with a non-numeric footnote that is set away from the numeric \affiliation
+%% footnotes. NOTE that if an \altaffiliation command is used it must
+%% come BEFORE the \affiliation call, right after the \author command, in
+%% order to place the footnotes in the proper location. Because non-numeric
+%% symbols are used, \altaffiliation should be used sparingly.
+%%
+%% In v7+ the \author command takes an optional argument which provides
+%% additional metadata about the author. Authors can provide the 16 digit
+%% ORCID, the surname (family or last) name, the given (first or fore-) name,
+%% and a name suffix, e.g. "Jr.". The syntax is:
+%%
+%% \author[orcid=0000-0002-9072-1121,gname=Gregory,sname=Schwarz]{Greg Schwarz}
+%%
+%% This name metadata in not shown, it is only for parsing by the peer review
+%% system so authors can be more easily identified. This name information will
+%% also be sent to the publisher so they can include it in the CROSSREF
+%% metadata. Including an orcid will hyperlink the author name to the
+%% author's ORCID page. Note that  during compilation, LaTeX will do some
+%% limited checking of the format of the ID to make sure it is valid. If
+%% the "orcid-ID.png" image file is  present or in the LaTeX pathway, the
+%% ORCID icon will appear next to the authors name.
+%%
+%% Even though emails are now required for each author, the \email does not
+%% produce output in the compiled manuscript unless the optional "show" command
+%% is used. For example,
+%%
+%% \email[show]{greg.schwarz@aas.org}
+%%
+%% All "shown" emails are show in the bottom left of the first page. Due to
+%% space constraints, only a few emails should be shown.
+%%
+%% To identify a corresponding author, use the \correspondingauthor command.
+%% The command appends "Corresponding Author: " to the argument it appears at
+%% the bottom left of the first page like the output from \email.
+
+\author[0009-0003-9099-5805,gname=Chuizheng,sname=Kong]{Chuizheng Kong (孔垂政)}
+\affiliation{Department of Astronomy, Tsinghua Univeristy, Beijing, 100084, People's Republic of China}
+\email{kcz24@mails.tsinghua.edu.cn}
+
+\author[0000-0002-1253-2763,gname=Hui,sname=Li]{Hui Li (李辉)}
+\affiliation{Department of Astronomy, Tsinghua Univeristy, Beijing, 100084, People's Republic of China}
+\email[show]{hliastro@tsinghua.edu.cn}
+
+%% Use the \collaboration command to identify collaborations. This command
+%% takes an optional argument that is either a number or the word "all"
+%% which tells the compiler how many of the authors above the command to
+%% show. For example "\collaboration[all]{(DELVE Collaboration)}" wil include
+%% all the authors above this command.
+%%
+%% Mark off the abstract in the ``abstract'' environment.
+\begin{abstract}
+
+Runaway stellar collisions in dense star clusters provide a promising pathway to form intermediate-mass black holes (IMBHs), but this channel has not yet been widely explored in a cosmological setting. We develop a semi-analytical model that connects globular cluster (GC) formation and evolution with IMBH seeding and the growth of nuclear black holes within cosmological halo merger trees. IMBH seeds are assigned at GC birth using metallicity- and surface-density-dependent fits calibrated from collisional $N$-body simulations, while GC orbital evolution, tidal mass loss, disruption, and dynamical friction determine whether the seeds remain in clusters, become wandering IMBHs, or reach galactic nuclei. Applying the model to a combined TNG50-1-Dark and TNG100-1-Dark halo sample, we find that the GC channel produces a distinct seed-formation history that peaks at $z \simeq 2.4$ and declines strongly toward higher redshift. After delivery to galactic nuclei and subsequent growth with a fiducial Eddington ratio $f_{\rm E}=0.3$, the predicted black-hole mass function broadly overlaps current high-redshift observational constraints over $M_\bullet \sim 10^6$--$10^8~M_\odot$. The model also produces a broad distribution of $M_\bullet/M_\star$, including high-redshift systems above the local black-hole--galaxy relation. These results show that IMBHs formed through runaway collisions in dense GCs can provide a viable contribution to the early assembly of massive and overmassive black holes in young galaxies.
+
+\end{abstract}
+
+%% Keywords should appear after the \end{abstract} command.
+%% The AAS Journals now uses Unified Astronomy Thesaurus (UAT) concepts:
+%% https://astrothesaurus.org
+%% You will be asked to selected these concepts during the submission process
+%% but this old "keyword" functionality is maintained in case authors want
+%% to include these concepts in their preprints.
+%%
+%% You can use the \uat command to link your UAT concepts back its source.
+\keywords{\uat{Galaxies}{573} --- \uat{Cosmology}{343} --- \uat{High Energy astrophysics}{739} --- \uat{Interstellar medium}{847} --- \uat{Stellar astronomy}{1583} --- \uat{Solar physics}{1476}}
+
+%% From the front matter, we move on to the body of the paper.
+%% Sections are demarcated by \section and \subsection, respectively.
+%% Observe the use of the LaTeX \label
+%% command after the \subsection to give a symbolic KEY to the
+%% subsection for cross-referencing in a \ref command.
+%% You can use LaTeX's \ref and \label commands to keep track of
+%% cross-references to sections, equations, tables, and figures.
+%% That way, if you change the order of any elements, LaTeX will
+%% automatically renumber them.
+
+\section{Introduction} \label{sect:intro}
+
+The discovery of massive black holes (BHs) in the first billion years of cosmic history provides a direct constraint on the formation of black-hole seeds and their early assembly. Luminous quasars at $z \gtrsim 6$ host black holes with masses of $M_{\bullet} \sim 10^8$-$10^{10}~M_\odot$ \citep[e.g.,][]{Banados+2018SMBH, Larson+2023SMBH, Kocevski+2023SMBH, Harikane+2023SMBH, Bogdan+2024SMBH, Furtak+2024SMBH}, requiring either massive initial seeds, sustained near-Eddington accretion, episodes of super-Eddington growth, low radiative efficiencies, or a combination of these processes \citep{Smith&Bromm+2019SMBH}. The tension has become sharper with JWST, which has revealed a population of fainter active galactic nuclei at high redshift, including systems whose inferred black-hole masses appear large compared with the stellar masses of their young host galaxies \citep[e.g.,][]{Maiolino+2024GN-z11&SMBH, Natarajan+2024UHZ1, Furtak+2024A2744QSO1}. These objects extend the early-black-hole problem from the most luminous quasars to a broader population of lower-mass galaxies, where the ratio $M_{\bullet} / M_\star$ may be even more informative than $M_{\bullet}$ alone.
+
+A particularly important class of objects is the population of high-redshift BHs that appear overmassive relative to their hosts. In this work, we use ``overmassive'' in the observational sense, referring to systems whose inferred $M_{\bullet} / M_\star$ lies substantially above the local BH-galaxy scaling relations \citep[e.g.,][]{KormendyHo2013, ReinesVolonteri2015}. A2744-QSO1 provides a clear example: deep JWST/NIRSpec spectroscopy identifies it as a reddened broad-line AGN at $z \simeq 7.04$, with a black-hole mass of order $10^7~M_\odot$ and a black-hole-to-galaxy mass ratio well above that of typical local galaxies \citep{Furtak+2024A2744QSO1}. Similar high ratios have been inferred for other JWST-selected broad-line AGN, although the quantitative values remain sensitive to virial mass estimators, bolometric corrections, host-galaxy decomposition, obscuration, and selection effects \citep{Pacucci+2023, Harikane+2023, Greene+2024}. The relevant theoretical question is therefore not only how to form the most massive $z \gtrsim 6$ quasars, but also how to produce a high-redshift population with a broad and possibly biased distribution of $M_{\bullet}/M_\star$.
+
+This question is closely connected to the nature of little red dots (LRDs). LRDs are compact red sources identified by JWST, often showing blue rest-UV continua, red rest-optical continua, strong Balmer breaks or Balmer-limit features, and in many cases broad Balmer emission lines \citep{Labbe+2023, Matthee+2024, Kocevski+2024, Greene+2024}. These properties suggest that at least a subset of LRDs host accreting black holes. At the same time, their spectral-energy distributions are difficult to interpret uniquely: stellar populations, dust-reddened AGN continua, dense gas around the accretion flow, and scattered or reprocessed AGN light can all contribute to the observed colours and line features \citep{Setton+2024, InayoshiMaiolino2025, Brooks+2024}. We therefore do not attempt to model the full LRD phenomenon. Instead, we focus on the subset of LRDs with evidence for black-hole components, asking whether their apparently large $M_{\bullet}/M_\star$ ratios can arise naturally from early seed formation and hierarchical assembly in compact stellar systems.
+
+Most theoretical models of early black-hole formation are commonly grouped into light-seed and heavy-seed scenarios. Light seeds, produced by Population III stellar remnants, begin with masses of order $10$--$10^2~M_\odot$ and require efficient subsequent growth to explain the earliest massive black holes. Heavy seeds, produced by direct collapse or supermassive-star collapse in special atomic-cooling environments, may begin with $10^4$--$10^6~M_\odot$ and therefore reduce the required amount of later accretion \citep{BrommLoeb2003, Begelman+2006, LodatoNatarajan2006, LatifFerrara2016}. Also, recently a two-phase galaxy formation model could combine these pictures well \citep{Mo+2024TwoGFM, Chen+2024TwoGFM, Chen+2025aTwoGFM, Chen+2025bTwoGFM}. A third route lies between these limits: dense stellar systems can form intermediate-mass black holes through runaway stellar collisions, very massive stars, compact-remnant interactions, or repeated mergers in young massive clusters, globular-cluster progenitors, and nuclear star clusters \citep{PortegiesZwartMcMillan2002, DevecchiVolonteri2009, Davies+2011, Rantala+2026}. This channel is especially relevant at high redshift, where gas-rich galaxies are expected to form compact stellar systems efficiently.
+
+Recent numerical work has greatly improved our understanding of IMBH formation through runaway stellar collisions in dense star clusters. Star-by-star simulations of GC formation by \citet{Fujii+2024bASURA+BRIDGE} showed that runaway mergers can already occur while a cluster is forming inside its parent molecular cloud, producing a very massive star of $\sim10^4~M_\odot$ and a possible IMBH of several $10^3~M_\odot$. ([PubMed][1]) The FROST-CLUSTERS simulations have explored this channel in increasingly broad cluster models: hierarchical cluster assembly can promote IMBH formation \citep{Rantala+2024FROST}, stellar binaries and triples can further increase the number and mass of the seeds \citep{Rantala+2025FROST}, and a large survey of more than 1400 isolated clusters has now mapped the dependence of IMBH formation on cluster density and metallicity and provided fitting formulae for the resulting IMBH masses \citep{Rantala+2026FROST}. ([Oxford Academic][2]) Complementary direct $N$-body simulations with \textsc{NBODY6++GPU} and Monte Carlo calculations with \textsc{MOCCA} by Vergara et al. followed an extremely compact, million-star cluster and found rapid growth of a very massive star above $5\times10^4~M_\odot$ through repeated collisions, followed by IMBH formation. ([DOI][3]) Together, these studies show that runaway collisions can form massive BH seeds over a range of dense-cluster environments, motivating a model that places this channel in a cosmological context and follows the later assembly of these seeds.
+
+Nuclear star clusters provide a natural mechanism for connecting cluster-scale seed formation to galaxy-scale black-hole assembly. Observationally, NSCs are dense stellar systems at galactic centres, and their formation is usually interpreted as a combination of in-situ star formation and the inspiral of massive star clusters through dynamical friction \citep{Neumayer+2020}. In a hierarchical universe, the same process can occur not only along the main progenitor branch, but also inside satellite galaxies before they merge into the main system. Satellite NSCs can therefore deliver both stellar mass and embedded black-hole seeds to the growing central nucleus. This channel is particularly relevant for overmassive high-redshift black holes because it can concentrate black-hole mass into small galaxies before their stellar hosts have fully assembled.
+
+In this paper, we develop a semi-analytic model for this compact-stellar-system pathway. GC formation is painted onto cosmological merger trees and tied to halo growth, gas availability, a Schechter cluster initial mass function, and spatial sampling in host or satellite systems; IMBH seeds are then assigned at cluster birth using the metallicity- and surface-density-dependent runaway-collision fit from \cite{Rantala+2026FROST}. The subsequent evolution follows stellar mass loss, tidal stripping, direct tidal tearing, and dynamical-friction sinking, allowing intact clusters, disrupted remnants, wandering IMBHs, and satellite NSCs to contribute to the final central mass budget. This structure lets us test whether hierarchical GC and NSC assembly can deliver enough black-hole mass to overmassive high-redshift systems without imposing seeds directly by a halo-mass threshold.
+
+The goal of this work is to determine whether GC and NSC assembly can provide a viable origin for high-redshift overmassive black holes, including the black-hole-hosting subset of LRDs. The model addresses the underlying mass-assembly problem: whether dense clusters can form IMBH seeds early, whether those seeds can be delivered efficiently to galactic centres, and whether the resulting central black holes can become massive compared with their young host galaxies. In this sense, LRDs with confirmed or likely AGN components provide an observational motivation and possible target population, while the model predicts the compact-stellar-system contribution to their black-hole masses. This paper is organised as follows. Sect.~\ref{sect:intro} introduces the observational motivation and the compact-stellar-system seed channel. Sect.~\ref{sect:method} gives a concise overview of the GC formation, sampling, orbital evolution, IMBH-seeding, final-status, and ex-situ NSC merger prescriptions, while the detailed equations and sampling rules are collected in the appendices. The appendices also provide the cosmological relations, galaxy scaling relations, and auxiliary statistical and photometric relations used by the semi-analytic calculation.
+
+\section{Method} \label{sect:method}
+
+In this section, we present our cosmological semi-analytical model for GC and massive BH formation and evolution within the framework of hierarchical structure formation. The model is based on the GC formation framework of \cite{Choksi+2018GC}, with tidal evolution from \cite{Fragione+2019GC}, dynamical friction (DF) from \cite{Gao+2024GC}, the baryon-retention limit from \cite{Chen&Gnedin2023GC}, and the mass--metallicity relation from \cite{Chen&Gnedin2024aGC}. We further include an IMBH seeding model at cluster formation based on the runaway-collision fits of \cite{Rantala+2024FROST, Rantala+2025FROST, Rantala+2026FROST}; see Sect.~\ref{subsect:IMBH} for details.
+
+\begin{figure*}[htbp!] \centering
+\scalebox{1}[0.9]{\includegraphics[width=\linewidth]{fig/schematic_diagram.png}}
+\caption{Overview of the semi-analytic GC--NSC--BH pathway. GC formation is painted onto cosmological halo merger trees, with halo growth, gas supply, and baryon retention setting the cluster mass budget. Individual GCs are sampled and assigned birth radii, metallicities, and IMBH seeds; their stellar and orbital evolution is then followed through stellar evolution, tidal stripping, direct tidal tearing, and dynamical friction. Deposited stars build the compact NSC component, while IMBHs that reach the central $1~{\rm pc}$ sink are added to the nuclear BH state, which grows under the central Eddington prescription; satellite branches are evolved recursively and incorporated into their descendants. Note that this schematic diagram is generated by AI tool (ChatGPT 5.6 Image) so small physical errors may remain.}
+\label{fig:schematic_diagram}
+\end{figure*}
+
+\subsection{GC formation, sampling, and evolution} \label{subsect:GC}
+
+We first summarize the main steps of GC formation, sampling, and evolution in the model, while the detailed prescriptions are given in our previous work and references. We adopt the GC formation model of \cite{Choksi+2018GC}, which builds on earlier work by \cite{Muratov&Gnedin2010GC} and \cite{Li+2014GC}. We first select dark-matter (DM) haloes from the IllustrisTNG simulations and retain the merger-tree branches that satisfy our selection criteria, as described in Sect.~\ref{subsect:data}. We then correct the selected merger trees following \cite{Choksi+2018GC}, enforcing monotonic halo-mass growth by skipping simulation outputs in which the halo mass decreases. Finally, GC formation is painted onto these corrected merger trees.
+
+A GC formation event is triggered when the specific halo mass accretion rate exceeds a threshold value. This threshold is the first tunable parameter, $p_3$.\footnote{We follow the parameter naming convention introduced in \cite{Muratov&Gnedin2010GC} and \cite{Li+2014GC}.} The total GC mass formed in each event is determined from the halo mass using the observed stellar mass--halo mass relation \citep{Behroozi+2013DM}, the stellar mass--gas mass relation \citep{Magdis+2012SMGM, Tacconi+2013SMGM, Lilly+2013SMGM, Genzel+2015SMGM, Tacconi+2018SMGM}, the baryon upper-limit prescription of \cite{Chen&Gnedin2024aGC} \czkong{Maybe more refs here?}, and the fraction of gas mass converted into GCs. The last of these is controlled by the second tunable parameter, $p_2$. Individual clusters are then sampled from a Schechter initial cluster mass function (ICMF), and assigned metallicities following \cite{Chen&Gnedin2024aGC}. Their radial distances from the galaxy centre are sampled from a continuous spherical S{\'e}rsic density profile, based on the assumption that newly formed GCs broadly follow the spatial distribution of the cold gas \cite{Gao+2024GC}. At birth, an IMBH is assigned based on the cluster properties if the criteria for runaway collisions are satisfied (see Sect.~\ref{subsect:IMBH} for details).
+
+The clusters are then evolved in a time-dependent gravitational background consisting of an Navarro-Frenk-White \citep{Navarro&Frenk&White1997DM} dark-matter halo, a S{\'e}rsic stellar component, and stellar mass previously deposited by other evolved GCs. During their evolution, GCs lose stellar mass through stellar evolution \citep{Conroy&Gunn2010}, continuous tidal stripping, and direct tidal tearing \citep{Fragione+2019GC}. The lost stellar mass is deposited at the corresponding radial distance in the galaxy. At the same time, the cluster orbit decays through dynamical friction \citep[DF;][]{Gao+2024GC}. If an IMBH-hosting cluster loses all of its stellar mass before reaching the centre, the remaining IMBH is treated as a wandering BH and continues to inspiral through DF. If a GC or a wandering IMBH reaches the fixed innermost $1~{\rm pc}$ sink, chosen following \cite{Gnedin+2014GC} and \cite{Gao+2024GC}, any remaining stellar mass is deposited into the innermost radial bin and the IMBH is added to the nuclear BH. We then assume that the incoming BH merges rapidly with any BH already at the galaxy centre, since the dense, gas-rich nuclear environment and interactions with surrounding stars can efficiently drive the BH pair toward coalescence \citep{Souvaitzis+2025, Souvaitzis+2026}.
+
+At each redshift, we track the fate of every formed GC and its associated IMBH, if present. The final states are grouped into the following cases:
+\begin{itemize}
+\item \textbf{Surviving GC:} the cluster still retains bound stellar mass and remains outside the fixed $1~{\rm pc}$ sink. Any stellar mass lost earlier remains recorded in the deposited-mass profile.
+\item \textbf{Disrupted or exhausted GC:} a GC without an IMBH loses all of its stellar mass outside the sink through stellar evolution or tidal effects. The lost stellar mass is deposited at the corresponding radius, and no bound remnant remains.
+\item \textbf{Sunk GC:} the cluster reaches the fixed $1~{\rm pc}$ sink before losing all of its stellar mass. Its remaining stars are deposited into the innermost radial bin, and any embedded IMBH is added to the nuclear BH.
+\item \textbf{Wandering IMBH:} an IMBH-hosting cluster loses all of its stellar mass before reaching the sink, leaving a naked IMBH outside the nucleus. The IMBH then continues to move inward under its own DF.
+\item \textbf{Sunk wandering IMBH:} a naked wandering IMBH later reaches the fixed $1~{\rm pc}$ sink and is added to the nuclear BH.
+\end{itemize}
+The deposited-mass profile records all stellar material removed by stellar evolution, continuous tidal stripping, direct tidal tearing, and final sink entry.
+
+\subsection{IMBH seeding in GCs} \label{subsect:IMBH}
+
+At birth, each GC is tested for IMBH formation through runaway stellar collisions. We use the fitting model of \cite{Rantala+2024FROST, Rantala+2025FROST, Rantala+2026FROST}, calibrated with more than 1400 collisional $N$-body simulations performed with \textsc{bifrost} \citep{Rantala+2021FROST, Rantala+2023BIFROST}. In this picture, dense and metal-poor clusters can form very massive stars through repeated stellar collisions, which may later collapse into IMBHs. The seed mass depends mainly on the cluster half-mass surface density $\Sigma_{\rm h}$ and metallicity $Z / Z_\odot$.
+
+We first assign the three-dimensional half-mass radius using the cluster mass--radius relation \citep{Marks&Kroupa2012MRRofSCs, Brown&Gnedin2021MRRofSCs},
+\begin{align}
+r_{\rm h} & = \dfrac{f_{\rm h} R_4}{1.3}
+\left( \dfrac{M_{\rm cl}}{10^4~M_\odot} \right)^{0.18},
+\label{eq:imbh_radius}
+\end{align}
+with fixed $f_{\rm h} = 0.125$, motivated by high-redshift observations \citep{Adamo+2024MRRofSCs}, and $R_4 = 2.365~{\rm pc}$. Assuming a \cite{Plummer1911MRRofSCs} profile, the corresponding half-mass surface density is
+\begin{align}
+\Sigma_{\rm h} & = \dfrac{M_{\rm cl}}{2 \pi (2^{2/3} - 1) r_{\rm h}^2} .
+\label{eq:Sigma_h}
+\end{align}
+These birth quantities, $r_{\rm h}$ and $\Sigma_{\rm h}$, are used only to determine the initial IMBH mass and are not evolved afterwards.
+
+In the low-density regime ($\log_{10} \left[ \Sigma_{\rm h} / \left( M_\odot / {\rm pc}^2 \right) \right] \leqslant 5.2$), the IMBH mass is given by
+\begin{align}
+M_{\bullet, \rm low} & = \begin{cases}
+A \log_{10} \left( \dfrac{\Sigma_{\rm h}}{M_\odot / {\rm pc}^2} \right) \\
+\quad + B \left[ \log_{10} \left( \dfrac{\Sigma_{\rm h}} {M_\odot / {\rm pc}^2} \right) \right]^2 + C , & \Sigma_{\rm h} \geqslant \Sigma_{\rm crit} (Z) ; \\
+0 , & \Sigma_{\rm h} < \Sigma_{\rm crit} (Z) .
+\end{cases}
+\label{eq:IMBHlow}
+\end{align}
+For each metallicity interval, the fit coefficients depend linearly on $\log_{10} \left( Z / Z_\odot \right)$,
+\begin{align}
+Q & = k_Q \log_{10} \left( \dfrac{Z}{Z_\odot} \right) + b_Q ,
+\end{align}
+where $Q$ denotes $A$, $B$, $C$, $\Sigma_{\rm crit}$, and, for the high-density branch below, $D$ and $E$. The corresponding $(k_Q, b_Q)$ values are chosen from the appropriate metallicity interval and are listed in Table~\ref{tab:IMBHcoef}. For the high-density branch ($\log_{10} \left[ \Sigma_{\rm h} / \left( M_\odot / {\rm pc}^2 \right) \right] > 5.2$), the fit is
+\begin{align}
+M_{\bullet, \rm high} & = D (Z) \log_{10} \left( \dfrac{\Sigma_{\rm h}}{M_\odot / {\rm pc}^2} \right) + E (Z) .
+\label{eq:IMBHhigh}
+\end{align}
+Finally, we retain only seeds with $M_\bullet > 100~M_\odot$, since we focus on IMBH formation through runaway collisions in dense star clusters. The assigned IMBH mass is stored with the GC and is not changed by later stellar evolution or tidal effect.
+
+\begin{table}[htbp!] \centering
+(a) Coefficients for $A(Z)$, $B(Z)$, $C(Z)$, and $\Sigma_{\rm crit} (Z)$ \vspace{5pt}
+
+\hspace{-32pt} \resizebox{1.11\columnwidth}{!}{\begin{tabular}{c c c c} \toprule
+Coef. & $Z / Z_\odot < 0.126$ & $0.126 \leqslant Z / Z_\odot < 0.398$ & $Z / Z_\odot > 0.398$ \\ \midrule
+$k_A$ & $- 1790.07$ & $9707.84$ & $1147.68$ \\
+$b_A$ & $- 7392.65$ & $2627.71$ & $- 721.18$ \\
+$B_1$      & $+162.46$   & $-1015.72$   & $-166.92$  \\
+$B_2$      & $+829.42$   & $-211.38$    & $+126.15$  \\
+$C_1$      & $+4734.11$  & $-23585.20$  & $-2002.25$ \\
+$C_2$      & $+16556.82$ & $-7814.04$   & $+471.59$  \\
+$\Sigma_1$ & $+0.0386$   & $+0.91$      & $+0.91$    \\
+$\Sigma_2$ & $+4.53$     & $+5.22$      & $+5.22$    \\ \bottomrule
+\end{tabular}} \vspace{5pt}
+
+(b) Coefficients for $D(Z)$ and $E(Z)$ \vspace{5pt}
+
+\hspace{-32pt} \resizebox{1.11\columnwidth}{!}{\begin{tabular}{c c c c} \toprule
+Coef. & $Z / Z_\odot < 0.079$ & $0.079 \leqslant Z / Z_\odot < 0.316$ & $Z / Z_\odot > 0.316$ \\ \midrule
+$D_1$ & $-37.37$   & $-922.15$  & $-611.27$  \\
+$D_2$ & $+1452.33$ & $+466.71$  & $+628.40$  \\
+$E_1$ & $+81.66$   & $+4242.58$ & $+2620.25$ \\
+$E_2$ & $-6892.57$ & $-2280.02$ & $-3137.93$ \\ \bottomrule
+\end{tabular}}
+\caption{Parameterized coefficients used in the IMBH seed-mass fitting functions Eqs.~\ref{eq:IMBHlow} and \ref{eq:IMBHhigh}.
+Panel (a) gives the coefficients for constructing $A (Z)$, $B (Z)$, $C (Z)$, and $\Sigma_{\rm crit} (Z)$, where, for example, $A (Z) = k_A \log_{10} (Z / Z_\odot) + b_A$. Panel (b) gives the coefficients for constructing $D (Z)$ and $E (Z)$.}
+\label{tab:IMBHcoef}
+\end{table}
+
+\subsection{Halo Mergers \& Nuclear Star Clusters} \label{subsect:merge}
+
+Compared with \cite{Gao+2024GC}, where GC orbital evolution was followed only along the main progenitor branch, we now apply the same treatment to GCs formed in both main and satellite branches. A GC formed in a satellite is assigned a radius within that satellite and evolves in its own halo until the satellite merges into a descendant branch. The satellite branch is followed explicitly up to this merger, after which its surviving material is transferred to the recipient halo.
+
+We define the nuclear star cluster mass, $M_{\rm NSC}$, as the evolved deposited stellar mass enclosed within $R_{\rm NSC} = 6~{\rm pc}$ \citep{Neumayer+2020NSC}. At a branch merger, the satellite nuclear BH and its deposited stellar mass inside the NSC region are added directly to the recipient nucleus; we also assume that the two nuclear BHs merge rapidly. Surviving non-central GCs and wandering IMBHs are instead released into the recipient halo at $0.5 R_{\rm vir}$ and continue evolving there \citep{Gao+2024GC}. This procedure is applied recursively, so compact nuclear material assembled in lower-level satellites can pass through intermediate branches before reaching the main progenitor.
+
+\subsection{Eddington-limited nuclear BH growth} \label{subsect:Eddington}
+
+We apply Eddington-limited growth only to the nuclear BH. Over a timestep $\Delta t$ at cosmic time $t$, the BH mass $M_\bullet$ evolves as
+\begin{align}
+M_\bullet (t + \Delta t) & = M_\bullet (t) e^{f_{\rm E} \Delta t / t_{\rm E}} , \\
+t_{\rm E} & = \dfrac{\varepsilon_{\rm r} \sigma_{\rm T} c}{4 \pi G m_{\rm p} (1 - \varepsilon_{\rm r})} ,
+\label{eq:eddington_growth}
+\end{align}
+where $f_{\rm E}$ is the Eddington ratio and $t_{\rm E}$ is the corresponding e-folding timescale. Here, $\varepsilon_{\rm r} = 0.1$ is the radiative efficiency, $\sigma_{\rm T}$ is the Thomson scattering cross-section, $c$ is the speed of light, $G$ is the gravitational constant, and $m_{\rm p}$ is the proton mass. We adopt $f_{\rm E} = 0.3$ in the fiducial model.
+
+Only the nuclear BH is allowed to accrete in this prescription. IMBHs that remain inside GCs, as well as non-central wandering IMBHs, do not grow by gas accretion. We do not impose an upper mass cap on the nuclear BH. Since a fixed Eddington ratio applied continuously can lead to excessive growth at late times, we use this prescription mainly for the high-redshift regime and focus on high-redshift statistical results in Sect.~\ref{sect:result}.
+
+\subsection{Cosmological simulations} \label{subsect:data}
+
+Our cosmological input is drawn from the IllustrisTNG simulation suite \citep{Nelson+2018TNG, Pillepich+2018TNG, Naiman+2018TNG, Marinacci+2018TNG, Nelson+2019TNG, Pillepich+2019TNG}, which was run with the moving-mesh code \textsc{Arepo} \citep{Springel2010Arepo, Pakmor+2011Arepo, Pakmor&Springel2013Arepo, Pakmor+2016Arepo, Weinberger+2020Arepo}. We use the DM-only counterparts TNG50-1-Dark and TNG100-1-Dark. The final sample contains 16,241 target haloes at $z = 0$: 15,937 TNG50-1-Dark haloes with $10^{10} < M_{\rm h} \leqslant 10^{13}~M_\odot$, and 304 TNG100-1-Dark haloes with $M_{\rm h} > 10^{13}~M_\odot$. For abundance calculations, we convert both simulations to the same TNG50 reference volume. TNG50 haloes therefore have unit weight, while each TNG100 halo is weighted by the volume ratio $V_{\rm TNG50}/V_{\rm TNG100} \simeq 0.1016$, with $V_{\rm TNG50} \simeq (51.67~{\rm cMpc})^3$ and $V_{\rm TNG100} \simeq (110.72~{\rm cMpc})^3$.
+
+We combine the two simulations because they provide a useful balance between mass resolution and simulation volume. TNG50 has better mass resolution and is therefore used for lower-mass haloes. \czkong{Lower limit by TNG50.} However, its smaller box contains only a limited number of very massive haloes. As shown in Fig.~\ref{fig:HMF}, the TNG50 halo mass function begins to fluctuate at $M_{\rm h} \gtrsim 10^{13}~M_\odot$ because of the small number of such objects, while the larger TNG100 volume gives more stable statistics at the high-mass end. We therefore use TNG100 for haloes above $10^{13}~M_\odot$. The effects of mass resolution in this mixed sample are discussed further in Sect.~\ref{subsect:resolution}.
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/HMF.pdf}
+\caption{Halo mass functions at $z=0$ for TNG50-1-Dark (blue circles) and TNG100-1-Dark (red squares), compared with the theoretical $\Lambda$CDM halo mass function from \citet{Tinker+2008HMF} (black curve). TNG50 follows the theoretical relation well over the resolved lower-mass range but shows larger fluctuations at the high-mass end because of its smaller simulation volume. TNG100 provides better statistics for these rare massive haloes. Error bars show the counting uncertainty in each mass bin.}
+\label{fig:HMF}
+\end{figure}
+
+\section{Results} \label{sect:result}
+
+The results below use the TNG50--TNG100 catalogue described above. We focus on the redshift-resolved BH mass functions (Sect.\ref{subsect:BHMF}) and the central-BH--host relation (Sect.~\ref{subsect:Mbh-Mstar}).
+
+\begin{comment}
+\subsection{Properties of GCs at $z = 0$ \& Comparison with Observations} \label{subsect:check}
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Mgc~Mhalo.pdf}
+\caption{Mgc vs Mhalo.}
+\label{fig:Mgc~Mhalo}
+\end{figure}
+
+As a first validation of the underlying GC population, we compare the final GC-system mass with the present-day halo mass. Over the high-mass interval sampled by the fiducial run, the model median follows the approximately linear $M_{\rm GC}$--$M_{\rm h}$ relation inferred for local GC systems and remains close to both the Choksi+2018 model relation and the Harris et al.\ observational calibration. The interquartile range is narrow compared with the full dynamic range of the relation, but it is not negligible; this scatter is expected because the selected haloes have different merger histories, GC formation episodes, metallicities, and subsequent disruption histories.
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Age~Metal.pdf}
+\caption{Age vs Metal.}
+\label{fig:Age~Metal}
+\end{figure}
+
+The age--metallicity comparison provides a complementary check on the formation history. The model contours occupy the same broad region as the Galactic and LMC GC measurements: the most metal-poor clusters are predominantly old, while the metal-richer population extends to younger ages and shows larger dispersion. This behaviour is qualitatively consistent with the Choksi-style formation picture used in \citet{Gao+2024GC}, in which early low-metallicity halo growth builds the old metal-poor population and later enrichment shifts subsequent cluster formation to higher metallicity. The agreement should be interpreted as a population-level validation of the GC formation and metallicity prescriptions, rather than a one-to-one fit to the observed Milky Way or LMC samples.
+
+\subsection{The $M_{\rm NSC}$-$M_\star$ Relation} \label{subsect:Mnsc-Mstar}
+
+\begin{figure*}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Fig.12_Mnsc-Mstar.pdf}
+\caption{Mnsc vs Mstar.}
+\label{fig:Mnsc~Mstar}
+\end{figure*}
+
+The deposited stellar component also falls in the observed NSC scaling regime. In the $M_{\rm NSC}$-$M_\star$ plane, the model points overlap the Neumayer+2020 compilation and the fitted relation for the dynamically measured subset, especially at the massive-galaxy end covered by the present halo sample. The model fit uses the 6 pc deposited-mass proxy, so it should be compared with observed NSC masses as the contribution from inspiralling and disrupted clusters, not as a complete prediction for all nuclear stellar mass.
+
+This distinction is important for interpreting deviations from the observational cloud. The calculation does not include in-situ nuclear star formation, gas inflow, or star formation triggered after cluster deposition. Therefore, agreement with the observed scaling supports the idea that GC inspiral can provide a substantial ex-situ NSC component, while any deficit relative to individual high-mass or late-type systems is not by itself a failure of the ex-situ channel. The declining $M_{\rm NSC} / M_\star$ trend in the right-hand panel is likewise consistent with the observed tendency for NSCs to become a smaller fraction of their host stellar mass in massive galaxies \citep{Neumayer+2020NSC}.
+
+\subsection{The $M_\bullet$-$M_{\rm NSC}$ Relation} \label{subsect:Mbh-Mnsc}
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Mbh-Mnsc.pdf}
+\caption{$M_{\rm NSC}$-$M_\star$.}
+\label{fig:Mbh-Mnsc}
+\end{figure}
+
+The model naturally produces systems in which a central BH and an NSC coexist. This is expected observationally: local galaxies can host both components, and the ratio $M_\bullet/M_{\rm NSC}$ spans orders of magnitude \citep{Neumayer+2020}. In the model, the relation is not imposed as an empirical scaling law. The NSC mass is the evolved stellar mass deposited inside $6~{\rm pc}$, whereas the BH mass counts only IMBHs that reach the fixed $1~{\rm pc}$ sink and the subsequent accretion of the central BH state.
+
+The plotted sequence therefore reflects delivery efficiency and accretion history. At high redshift, many haloes have already assembled $M_{\rm NSC}\sim10^7$--$10^9~M_\odot$ but retain comparatively small central BHs, because only a subset of IMBH-bearing clusters have reached the sink. Towards lower redshift, additional inspiral events and central-only accretion move the same population upward in $M_\bullet$ at nearly fixed or slowly growing $M_{\rm NSC}$. By $z=0$, the fiducial catalogue spans $M_\bullet\simeq3.4\times10^7$--$1.6\times10^9~M_\odot$ and $M_{\rm NSC}\simeq4.7\times10^7$--$1.6\times10^9~M_\odot$, illustrating that the model can reach BH-to-NSC mass ratios of order unity in massive descendants.
+\end{comment}
+
+\subsection{BH Seeding History \& Mass Function} \label{subsect:BHMF}
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Fig.02_BHseed_hist.pdf}
+\caption{Cosmic formation history of intermediate-mass black-hole (IMBH) seeds. The upper panel shows the differential seed-formation rate, ${\rm d} n_{\rm seed}/{\rm d} \log_{10}(1+z)$, and the lower panel shows the cumulative seed density, $n_{\rm seed}(>z)$, as functions of $\log_{10}(1+z)$; the upper axis gives the corresponding redshift. The purple curve labelled ``This work'' includes every final-GC row with $M_{\rm IMBH,init}>0$, weighted to the full TNG50 reference volume; its rate bins have width $\Delta\log_{10}(1+z)=0.02$ and its cumulative curve uses the strict condition $z_{\rm form}>z$. The black, blue, red, and green curves show the All seeds, Pop-III (sub-Eddington), Pop-III (Eddington), and Pop-II histories from Chen+2026.}
+\label{fig:BHseed_hist}
+\end{figure}
+
+\czkong{Add a para here to describe the cosmic BH seeding history.}
+
+Figure~\ref{fig:BHseed_hist} follows the formation of the IMBH seeds assigned at GC birth. In this catalogue, all rows with positive $M_{\rm IMBH, init}$ lie within the plotted range $0 \leqslant z_{\rm form} \leqslant 50$; after the TNG50/TNG100 volume weighting. The differential rate has a broad maximum at $z\simeq2.4$ with ${\rm d} n_{\rm seed}/{\rm d} \log_{10}(1+z)\simeq24.8~{\rm cMpc}^{-3}~{\rm dex}^{-1}$, while the cumulative density decreases from $7.42~{\rm cMpc}^{-3}$ near $z=0$ to $0.45~{\rm cMpc}^{-3}$ at $z\simeq7$ and $2.2\times10^{-2}~{\rm cMpc}^{-3}$ at $z\simeq10$. The purple history lies above the \cite{Chen+2025bTwoGFM} (see their model in detail in \cite{Mo+2024TwoGFM, Chen+2024TwoGFM, Chen+2025aTwoGFM}) comparison curves at lower redshift but turns over towards earlier times; because it is the volume-normalised event history of the final-GC catalogue rather than a continuous cosmic star-formation prediction, this comparison primarily illustrates the different seed-formation prescriptions and catalogue normalisations. The final Satellite inventory contains 3,786,785 positive IMBH entries, with masses from $1.00\times10^2$ to $3.05\times10^3~M_\odot$ before volume weighting. , whereas the Satellite curve is a final-inventory measurement. while the Satellite curve is concentrated at low masses because it is a final-inventory count.
+
+For the redshift-resolved BH mass function, we use the component split implemented by the plotting pipeline. The Nuclear component contains positive central-BH masses in the halo-summary rows at each output redshift. The Satellite component contains positive IMBH masses in the final inventory that remain outside the fixed $1~{\rm pc}$ sink, either in a bound GC that survives outside the nucleus or as a naked wandering IMBH whose stellar envelope was lost outside the nucleus. A bound GC or a wandering IMBH that reaches the sink contributes to the central channel instead; clusters whose stellar component is exhausted or tidally torn without a surviving IMBH do not contribute a BH entry.
+
+Using the volume convention defined in Sect.~\ref{subsect:data}, the resulting $n_{\rm BH}$ values are weighted catalogue abundances. In the current output, the Nuclear inventory has 2,409 positive entries at $z=0$, 1,644 at $z=7$, and 534 at $z=10$. The Nuclear curves are evaluated separately at each output redshift. In Figure~\ref{fig:BHMF}, the Nuclear curves remain broadly at the $10^{-3}~{\rm cMpc}^{-3}$ level across the intermediate-mass range at several output redshifts and develop a declining high-mass tail towards later times. Figure~\ref{fig:BHMF} is therefore an abundance diagnostic of this mixed simulation sample and a complete cosmological BH mass function.
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Fig.03_BHMFs.pdf}
+\caption{Differential black-hole mass function comparison. Coloured curves show the redshift-resolved Nuclear component, the grey dash-dotted curve shows the final Satellite inventory, and the black curve is their $z=0$ sum. The model is plotted as $\log_{10}\Phi$ per dex and uses the TNG50 reference volume with the stated TNG100 volume weights. Symbols and error bars show the compiled high-redshift observational points labelled in the legend. The colour bar gives the output redshift for the Nuclear curves. \cite{Wu+2022BHMF, He+2024BHMF, Matthee+2024BHMF, Lai+2024BHMF, Taylor+2025BHMF, Fei+2026BHMF}}
+\label{fig:BHMFs}
+\end{figure}
+
+Figure~\ref{fig:BHMFs} presents the same model population in the differential form $\Phi(M_{\rm BH})$ per dex, allowing a direct comparison with the compiled high-redshift measurements \citep{Wu+2022BHMF, He+2024BHMF, Matthee+2024BHMF, Lai+2024BHMF, Taylor+2025BHMF, Fei+2026BHMF}. The coloured model curves are the positive central-BH populations sampled at each output redshift. The model curves use the same TNG50 reference volume and TNG100 weighting as Figure~\ref{fig:BHseed_hist}; the different presentation changes the binning and logarithmic ordinate, not the underlying catalogue. Across much of the observed $M_{\rm BH}\sim10^6$--$10^8~M_\odot$ interval, the redshift-resolved Nuclear curves overlap the range spanned by the compiled measurements and their uncertainties, while retaining the observed decline in abundance towards larger black-hole masses. The comparison is therefore a broad population-level consistency check.
+
+\subsection{The $M_\bullet$-$M_\star$ Relation} \label{subsect:Mbh-Mstar}
+
+\begin{figure}[htbp!] \centering
+\includegraphics[width=\linewidth]{fig/Fig.01_Mbh-Mstar.pdf}
+\caption{Central black-hole mass as a function of the inferred host stellar mass. Coloured solid curves and shaded regions show the binned mean and standard deviation of all finite central-BH entries at each output redshift; dashed curves and their lighter bands retain only entries with $M_\bullet>100~M_\odot$. The colour bar gives redshift. Symbols show the compiled high-redshift observations, the green relation and band show the local Reines--Volonteri relation and its scatter, and dashed green lines mark fixed $M_\bullet / M_\star$ ratios. The host stellar mass is inferred from the main-progenitor halo mass through the adopted SMHM relation.}
+\label{fig:Mbh-Mstar}
+\end{figure}
+
+We then compare the central BH mass with the stellar mass inferred for the same redshift. The stellar mass in this diagnostic is not measured from simulated star particles; it is obtained by applying the project stellar mass-halo mass (SMHM) helper to the main-progenitor halo mass at each output redshift. The comparison is therefore a consistency check between the cluster-seeded central BH channel and an empirical host-galaxy mass scale.
+
+The fiducial tracks occupy the low-mass extrapolation of the local \citet{ReinesVolonteri2015} relation at early times and then move upward as central BH accretion proceeds. At fixed redshift, the model produces a broad range of $M_\bullet/M_\star$, with some high-redshift systems lying above the local relation for their inferred stellar mass. Overall, the model generally matches the observations across the plotted mass and redshift range and reproduces the broad increase of $M_\bullet/M_\star$ towards lower inferred host mass. The remaining scatter reflects the stochastic delivery of IMBHs, the central-only growth prescription, and the fact that the stellar mass on the horizontal axis is an empirical SMHM estimate rather than a directly measured stellar-particle mass.
+
+\section{Discussion \& Caveats} \label{sect:discuss}
+
+\subsection{Impact of Resolution} \label{subsect:resolution}
+
+The choice of the underlying cosmological simulation requires some care. We use a mixed TNG50-1-Dark and TNG100-1-Dark sample, with the lower-mass haloes taken from TNG50. This choice is mainly motivated by the limited volume of TNG50, which gives poor statistics at the high-mass end of the halo mass function. The dark-matter particle masses are \(5.38\times10^5~M_\odot\) in TNG50-1-Dark and \(8.86\times10^6~M_\odot\) in TNG100-1-Dark \citep{Springel+2018TNG}. We require at least 500 dark-matter particles for a halo to be considered sufficiently resolved \citep{Naoz+2009DM,Trenti+2010DM,Chen&Gnedin2023GC}. This corresponds to minimum halo masses of approximately \(2.69\times10^8~M_\odot\) for TNG50 and \(4.43\times10^9~M_\odot\) for TNG100.
+
+These limits can be compared with the minimum halo mass expected to host a GC in our model. According to \citet{Choksi&Gnedin2019GCb}, the GC mass--halo mass ratio at \(z\sim10\) is approximately \(3\times10^{-4}\). A halo hosting a GC with our minimum cluster mass, \(M_{\rm min}=10^5~M_\odot\), therefore requires roughly
+
+$$
+M_{\rm h}\sim \frac{10^5~M_\odot}{3\times10^{-4}}
+\sim3\times10^8~M_\odot.
+$$
+
+A similar estimate follows from the total GC mass--halo mass relation in Equation~C39. For the fiducial model parameters, the minimum halo mass required to form one GC is approximately
+
+$$
+M_{\rm h,min}\sim
+\frac{10^5~M_\odot}
+{1.8\times10^{-4}p_2f_{\rm b}}
+\sim4.76\times10^8~M_\odot.
+$$
+
+Both estimates are close to, but above, the 500-particle limit of TNG50. In contrast, they are well below the corresponding resolution limit of TNG100. Therefore, some low-mass progenitors in the TNG100 merger trees may not be fully resolved for GC formation.
+
+We do not expect this limitation to strongly affect the main conclusions presented here. The TNG100 sample is used mainly to improve the statistics of massive haloes, while the lower-mass regime is covered by the higher-resolution TNG50 simulation. In addition, the Abell 2744-QSO1 case study is selected from the TNG50 sample. Nevertheless, the treatment of low-mass progenitors remains a resolution-dependent uncertainty, and future work using larger-volume simulations with higher mass resolution will provide a more complete test.
+
+\subsection{Choice of minimum GC mass} \label{subsect:Mmin}
+
+The minimum GC mass in our production runs was chosen as $10^5~M_\odot$, which is the same as \cite{Chen&Gnedin2022GC}. However, we note that in \cite{Rantala+2026FROST}'s model, the BH efficiency (IMBH mass / initial cluster mass) is higher as cluster mass becomes smaller. And they also note that cluster with mass $\lesssim 10^4~M_\odot$ could hardly holde any IMBH. To confirm the choice of minimum GC mass has negnigible effect on the final results, we also confuect a comparison run with new suite of params: $M_{\rm min} = 3 \times 10^4~M_\odot, p_2 = 14, p_3 = 0.7$. The new $M_{\rm min}$ is adopt from the smallest cluster in \cite{Vergara+2026IMBH, Rantala+2025FROST} and a slightly larger or conservative value. And new $p_2 = 14, p_3 = 0.7$ is from \cite{Chen&Gnedin2023GC}. Using Eq.C39, the new minimum halo mass required to form one GC
+is approximately $7.17 \times 10^7~M_\odot$.
+
+\subsection{Variation of IMBH Seeding Models} \label{subsect:IMBHmodels}
+
+Our fiducial model assigns IMBH seeds using the surface-density- and metallicity-dependent fits of \cite{Rantala+2026FROST}. To test how sensitive our results are to this choice, we also consider the independent collision-based model of \cite{Vergara+2026IMBH}. Their direct $N$-body and Monte Carlo simulations show that very dense, low-metallicity clusters can form very massive stars through repeated stellar collisions, which then collapse into IMBH seeds within a few Myr. Their model is based on a critical cluster mass and density above which stellar collisions become efficient.
+
+\cite{Vergara+2026IMBH} considered two limits when applying their model to young massive clusters observed by JWST. In their conservative case, the current cluster mass and radius are used directly, without assuming that the cluster was more compact at birth or including the effect of gas. We refer to this as the pessimistic case here. They find the approximate relation
+\begin{align}
+\log_{10}\left(\dfrac{M_\bullet}{M_\odot}\right)
+=
+-2
++
+0.88\log_{10}\left(\dfrac{M_{\rm cl}}{M_\odot}\right).
+\end{align}
+In their optimistic case, clusters are assumed to have been more compact at early times, following the expansion relation $r_{\rm h}\propto t^{2/3}$. The higher initial density increases the collision rate and gives
+\begin{align}
+\log_{10}\left(\dfrac{M_\bullet}{M_\odot}\right)
+=
+-0.76
++
+0.76\log_{10}\left(\dfrac{M_{\rm cl}}{M_\odot}\right).
+\end{align}
+The corresponding BH formation efficiencies can reach about $1\%$ in the pessimistic case and about $10\%$ in the optimistic case \citep{Vergara+2026IMBH}. Unlike our fiducial prescription, these fitting relations depend only on cluster mass and do not explicitly include metallicity or half-mass surface density. We therefore use them as simple alternative prescriptions to bracket the uncertainty in the initial IMBH mass rather than as a full replacement for the cluster-dynamical model of \cite{Vergara+2026IMBH}.
+
+We repeat the cosmological calculation with the same GC formation histories, orbital evolution, halo merger trees, and nuclear BH growth model, changing only the IMBH seed-mass prescription. Figure~\ref{fig:seed_variation} compares the resulting BH populations. The pessimistic Vergara prescription remains closer to the fiducial model, while generally assigning larger seeds to the more massive clusters. The optimistic prescription gives a stronger increase in the initial seed masses and therefore shifts the later nuclear-BH population toward higher masses. Because the GC formation times and halo assembly histories are unchanged, the main difference appears in the BH mass scale rather than in the overall timing of GC formation.
+
+The same trend is reflected in the BH mass function and the $M_\bullet$--$M_\star$ relation. The pessimistic model produces a moderate change relative to the fiducial calculation, whereas the optimistic model increases the abundance of more massive BHs and moves the nuclear population toward larger $M_\bullet/M_\star$. Thus, the quantitative BH masses remain sensitive to the uncertain runaway-collision prescription, but the broader result that dense GCs can provide significant IMBH seeds for early nuclear BH growth is not tied to a single seeding model.
+
+\subsection{Variation of Timestep} \label{subsect:timestep}
+
+\subsection{Variation of Scaling} \label{subsect:f_h}
+
+\subsection{Caveats, Limitations, \& Future Works} \label{subsect:limit}
+
+As mentioned in Sect.~\ref{subsect:resolution}, our TNG100 samples are below the recommended resolution limit.
+
+\section{Conclusions \& Summary} \label{sect:summary}
+
+%% Please use the acknowledgment and contribution environments. This will
+%% be anonomyized when the "anonymous" style option is used.
+\begin{acknowledgments}
+We thank all the people that have made this AASTeX what it is today. CK is grateful to Houyi Sun, Huan Yang, Yingtian Chen and Oleg Y. Gnedin for useful discussions. This
+includes but not limited to Bob Hanisch, Chris Biemesderfer, Lee Brotzman,
+Pierre Landau, Arthur Ogawa, Maxim Markevitch, Alexey Vikhlinin and Amy
+Hendrickson. Also special thanks to David Hogg and Daniel Foreman-Mackey
+for the new {\tt\string modern} style design. Considerable help was provided via bug
+reports and hacks from numerous people including Patricio Cubillos, Alex
+Drlica-Wagner, Sean Lake, Michele Bannister, Peter Williams, Jonathan
+Gagne, Arthur Adams, Nicholas Wogan, Aaron Pearlman, Jeff Mangum, Mark Durre, Joel Ong, and Stephen Thorp.
+\end{acknowledgments}
+
+%\begin{contribution}
+%%This section gives authors the space to recognize author contributions. The text inside this environment is NOT counted towards the total word quanta. At a minimum, manuscripts are expected to include this text:
+
+%All authors contributed equally to the Terra Mater collaboration.
+
+%% But authors are expected to provide more specific details, e.g.
+%%
+%%SC was responsible for writing and submitting the manuscript.
+%%WWM came up with the initial research concept and edited the manuscript.
+%%OTS obtained the funding and edited the manuscript.
+%%EBF provided the formal analysis and validation. He also edited the manuscript.
+%%GEH Supervised the undergraduates, wrote the software and administers the project github and Zenodo repositories.
+%%
+%% Authors can use the Contributor Role Taxonomy (CRediT) at
+%% https://credit.niso.org
+%% for ideas on how write a good statement tailored to their needs.
+
+%\end{contribution}
+
+%% To help institutions obtain information on the effectiveness of their
+%% telescopes the AAS Journals has created a group of keywords for telescope
+%% facilities.
+%
+%% Following the acknowledgments section, use the following syntax and the
+%% \facility{} or \facilities{} macros to list the keywords of facilities used
+%% in the research for the paper.  Each keyword is check against the master
+%% list during copy editing.  Individual instruments can be provided in
+%% parentheses, after the keyword, but they are not verified.
+%\facilities{HST(STIS), Swift(XRT and UVOT), AAVSO, CTIO:1.3m, CTIO:1.5m, CXO}
+
+%% Similar to \facility{}, there is the optional \software command to allow
+%% authors a place to specify which programs were used during the creation of
+%% the manuscript. Authors should list each code and include either a
+%% citation or url to the code inside ()s when available.
+\software{astropy \citep{2013A&A...558A..33A,2018AJ....156..123A,2022ApJ...935..167A}}
+
+%% Appendix material should be preceded with a single \appendix command.
+%% There should be a \section command for each appendix. Mark appendix
+%% subsections with the same markup you use in the main body of the paper.
+%%
+%% Each Appendix (indicated with \section) will be lettered A, B, C, etc.
+%% The equation counter will reset when it encounters the \appendix
+%% command and will number appendix equations (A1), (A2), etc. The
+%% Figure and Table counter will not reset.
+
+\appendix
+
+\section{Cosmology and Halo Quantities}
+\label{app:cosmology_equations}
+
+This appendix reviews the cosmological equations used by the semi-analytic model to convert between redshift, cosmic time, halo virial quantities, and the analytic background potential. Throughout these calculations we adopt a standard spatially flat $\Lambda$CDM cosmology and neglect radiation, which is subdominant for the halo-evolution redshifts considered here. The expansion function is
+\begin{align}
+\Omega_{\Lambda ,0} & = 1 - \Omega_{\rm m, 0} ,\\
+E(z) & = \dfrac{H (z)}{H_0} = \sqrt{\Omega_{\rm m, 0} (1 + z)^3 + \Omega_{\Lambda, 0}} .
+\end{align}
+Here $E(z)$ is the dimensionless Hubble parameter; $H_0$ is the present-day Hubble constant; $H(z)$ is the Hubble parameter at redshift $z$; $\Omega_{\rm m,0}$ is the present-day matter density parameter; and $\Omega_{\Lambda,0}$ is the present-day dark-energy density parameter. The current implementation uses a single cosmology for both the formation catalogues and the analytic orbital-evolution background. We adopt $\Omega_{\rm m,0}=0.307$, $\Omega_{\Lambda,0}=0.693$, and $H_0=67.97\,{\rm km\,s^{-1}\,Mpc^{-1}}$, matching the \cite{DESIcollaboration2025} flat-$\Lambda$CDM constraints used in the code.
+
+The evolving matter density parameter is
+\begin{align}
+\Omega_{\rm m}(z) &=
+\dfrac{\Omega_{\rm m,0}(1+z)^3}
+{\Omega_{\Lambda,0}+\Omega_{\rm m,0}(1+z)^3}.
+\end{align}
+
+The cosmic age $t$ at redshift $z$ is
+\begin{align}
+t(z) = \dfrac{2}{3 H_0 \sqrt{\Omega_{\Lambda,0}}} \operatorname{asinh} \left[ \sqrt{\dfrac{\Omega_{\Lambda,0}}{\Omega_{\rm m,0}}} (1 + z)^{-3/2} \right] .
+\end{align}
+The inverse age-to-redshift conversion is
+\begin{align}
+z(t) &= \left[ \dfrac{\sqrt{\Omega_{\Lambda, 0} / \Omega_{\rm m, 0}}}{\sinh \left( 3 H_0 \sqrt{\Omega_{\Lambda,0}} t / 2 \right)} \right]^{2/3} - 1 .
+\end{align}
+
+The virial overdensity relative to the critical density follows the \cite{Bryan&Norman1998DM} form
+\begin{align}
+\Delta_{\rm c} (z) & = 18 \pi^2 + 82 x - 39 x^2 , \\
+x &= \Omega_{\rm m}(z)-1 .
+\end{align}
+The critical density and the corresponding virial radius are
+\begin{align}
+\rho_{\rm crit} (z) & = \dfrac{3 H^2 (z)}{8 \pi G} , \\
+R_{\rm vir} & = \sqrt[3]{ \dfrac{3 M_{\rm h}}{4\pi \Delta_{\rm c} (z) \rho_{\rm crit} (z)} } ,
+\end{align}
+where $G$ is the gravitational constant and $M_{\rm h}$ is halo virial mass.
+
+The virial velocity is
+\begin{align}
+v_{\rm vir} & = \sqrt{\dfrac{G M_{\rm h}}{R_{\rm vir}}} .
+\end{align}
+
+For the dark-matter part of the analytic background, the halo concentration \citep{Maccio+2008DM} and NFW \citep{Navarro&Frenk&White1997DM} scale radius are
+\begin{align}
+c & = 10^{0.971} \left( \dfrac{M_{\rm vir} h}{10^{12}~M_\odot} \right)^{-0.094},\\
+R_s & = \dfrac{R_{\rm vir}}{c}.
+\end{align}
+where $h = H_0 / (100~{\rm km/s/Mpc})$ is the reduced Hubble constant. The radial derivative of the NFW potential is
+\begin{align}
+\dfrac{{\rm d}  \Phi_{\rm NFW}}{{\rm d}  r} = \dfrac{G M_{\rm vir}}{\ln (1 + c) - c / (1 + c)} \left[ \dfrac{\ln (1 + r / R_s)}{r^2} - \dfrac{1}{r (r + R_s)} \right] ,
+\end{align}
+where $M_{\rm vir} = M_{\rm h}$ is the virial mass and $r$ is galactocentric radius.
+
+We use the bound mass of the main-progenitor subhalo from the TNG SubLink tree as the halo-mass input \(M_{\rm h}\) for the analytic virial-radius calculation. We treat this quantity as an approximation to the virial mass \(M_{\rm v}\).
+
+\section{Galaxy Scaling Relations} \label{appendix:galaxy}
+
+The stellar mass-halo mass(SMHM) relation is written as \czkong{May be updated later.}
+\begin{align}
+\log_{10} M_{\star} & = \log_{10} (\epsilon M_1) + f \left( \log_{10} \dfrac{M_{\rm h}}{M_1} \right) - f(0) + \xi , \\
+f (x) & = - \log_{10} (10^{\alpha x} + 1) + \dfrac{\delta [\log_{10} (1 + e^x)]^\gamma}{1 + e^{10^{-x}}} .
+\end{align}
+Here $M_{\star}$ is stellar mass, $M_{\rm h}$ is halo mass, $M_1$ is the characteristic halo mass, $\epsilon$ is the stellar-to-halo normalisation, $\alpha$, $\delta$, and $\gamma$ control the low-mass slope, high-mass transition, and curvature, and $\xi$ is the lognormal scatter. The redshift-dependent quantities are
+\begin{align}
+a & = \dfrac{1}{1 + z} , \\
+\nu & = e^{- 4 a^2},\\
+\log_{10} \epsilon & = - 1.777 - 0.006 (a - 1) \nu -0.119 (a - 1) , \\
+\log_{10} M_1 & = 11.514 + \left[ - 1.793 (a - 1) - 0.251 z \right] \nu , \\
+\alpha & = -1.412 + 0.731 (a - 1) \nu , \\
+\delta
+&= 3.508+\left[2.608(a-1)-0.043z\right]\nu,\\
+\gamma
+&= 0.316+\left[1.319(a-1)+0.279z\right]\nu,\\
+\xi & = \xi (z) = {\cal N} \left( 0, 0.218 + 0.023 \dfrac{z}{1 + z} \right) .
+\end{align}
+
+Along a merger-tree branch, stellar mass is grown self-consistently using
+\begin{align}
+M_\star^{(i + 1)} & = M_\star^{(i)} + \left[
+M_{\star, {\rm SMHM}} \left( M_{\rm h}^{(i + 1)}, z^{(i + 1)} \right) \notag \right. \\
+& - \left. M_{\star, {\rm SMHM}} \left( M_{\rm h}^{(i)}, z^{(i)} \right) \right] 10^{\xi \left( z^{(i)} \right)}.
+\end{align}
+Here the superscript $(i)$ denotes the first progenitor, and $M_{\star, {\rm SMHM}}$ is the stellar mass from the SMHM relation.
+
+The cold-gas mass is expressed through before applying the baryon-retention ceiling \citep{Choksi+2018GC, Chen&Gnedin2023GC}:
+\begin{align}
+\dfrac{M_{\rm g}}{M_\star} & =
+0.35 \times 3^{2.7} \left( \dfrac{M_\star}{10^9~M_\odot} \right)^{-n_M \left( M_\star \right)} \left( \dfrac{1 + z}{3} \right)^{n_z (z)} 10^{\xi_{\rm g}} , \\
+n_M \left( M_\star \right) & = \begin{cases}
+0.19, & M_\star < 10^9~M_\odot, \\
+0.33, & M_\star \geqslant 10^9~M_\odot, \end{cases} \\
+n_z (z) & = \begin{cases}
+2.7, & z \leqslant 2, \\
+1.4, & 2 < z \leqslant 3, \\
+1.4 \dfrac{\ln (4 / 3)}{\ln [(1 + z) / 3]}, & z > 3 ,
+\end{cases}\\
+\xi_{\rm g} & = {\cal N} (0, 0.3) .
+\end{align}
+
+The retained baryon fraction is limited by \citep{Muratov&Gnedin2010GC, Chen&Gnedin2023GC}
+\begin{align}
+f_{\star} & = \dfrac{M_{\star}}{f_{\rm b} M_{\rm h}} , \\
+f_{\rm g} & = \dfrac{M_{\rm g}}{f_{\rm b} M_{\rm h}} , \\
+f_{\rm g} & = \begin{cases}
+0, & f_{\star} \geqslant f_{\rm in} , \\
+f_{\rm in} - f_{\star}, & f_{\star} < f_{\rm in} ~\&~ f_{\star} + f_{\rm g} > f_{\rm in} , \\
+\dfrac{M_{\rm g}}{f_{\rm b} M_{\rm h}}, & f_{\star} + f_{\rm g} \leq f_{\rm in},
+\end{cases}
+\end{align}
+where $f_{\rm b} = \Omega_{\rm b} / \Omega_{\rm m}$ is the cosmic baryon fraction, $f_{\star}$ and $f_{\rm g}$ are stellar and gas fractions normalised to $f_{\rm b}M_{\rm h}$, and $f_{\rm in}$ is the accreted baryon fraction.
+\begin{align}
+f_{\rm in} & = \left[ 1 + \left( 2^{2/3} - 1 \right) \left( \dfrac{1.69 \times 10^{10}~M_\odot}
+{M_{\rm h}} \dfrac{e^{-0.63 z}}
+{1 + e^{(z / \beta)^{15}}} \right)^2 \right]^{-3/2}, \\
+\beta & = 6 \left[ \ln \left( 1.82 \times 10^3 e^{-3.78} \right) - 1 \right]^{- 1 / 15} \approx 5.61.
+\end{align}
+
+\section{GC Formation} \label{appx:GCform}
+
+GC formation is painted onto fixed halo merger trees and followed along all retained branches. A formation event is triggered when the specific halo growth rate exceeds $p_3$,
+\begin{align}
+\dfrac{M_{\rm h}^{(i)} / M_{\rm h}^{(i - 1)} - 1}{t^{(i)} - t^{(i - 1)}} > p_3 ,
+\label{eq:p3}
+\end{align}
+where $t^{(i)}$ and $t^{(i - 1)}$ are the cosmic ages of the current halo and its progenitor. The host stellar-mass, gas, and baryon-retention relations are given in Appendix~\ref{appendix:galaxy}. The total cluster mass assigned to one formation event is
+\begin{align}
+M_{\rm GC} = 1.8 \times 10^{-4} p_2 M_{\rm g} .
+\label{eq:p2}
+\end{align}
+The model therefore has two tunable parameters: $p_3$ sets the formation-trigger threshold, while $p_2$ controls the cluster-formation efficiency. Once the event mass budget is set, individual clusters are assigned masses and positions, and IMBHs are added where the seeding criteria are satisfied. The cluster sampling procedure is described below, while the IMBH seeding model is given in Sect.~\ref{subsect:IMBH}.
+
+\subsection{Mass sampling}
+\label{subsect:mass_sample}
+
+Individual cluster masses are drawn from a Schechter initial cluster mass function,
+\begin{align}
+\dfrac{{\rm d} N}{{\rm d} M} = N_M M^{-2} e^{-M / M_{\rm c}} ,
+\label{eq:ICMF}
+\end{align}
+where $N_M$ is the normalization and $M_{\rm c}$ is the exponential cut-off mass. We adopt $M_{\rm c} = 10^7~M_\odot$ following \cite{Choksi&Gnedin2019aGC}. The total cluster mass in one formation event is therefore constrained by
+\begin{align}
+M_{\rm GC} & = \int_{M_{\rm min}}^{M_{\rm max}} M \dfrac{{\rm d} N}{{\rm d} M} {\rm d} M = \int_{M_{\rm min}}^{M_{\rm max}} \dfrac{N_M}{M} e^{-M / M_{\rm c}} {\rm d} M \notag \\
+& = N_M \left[ \Gamma \left( 0, \dfrac{M_{\rm min}}{M_{\rm c}} \right) - \Gamma \left( 0, \dfrac{M_{\rm max}}{M_{\rm c}} \right) \right]
+\label{eq:Mmax1}
+\end{align}
+where $M_{\rm min} = 10^5~M_\odot$ is the minimum sampled cluster mass (see Sect.~\ref{subsect:Mmin} for discussion), $M_{\rm max}$ is the maximum cluster mass, and $\Gamma (s, x) = \int_x^{+ \infty} t^{s - 1} e^{- t} {\rm d} t$ is the upper incomplete gamma function. Following the optimal sampling method of \cite{Schulz+2015CMF} and \cite{Choksi&Gnedin2019aGC}, we set $M_{\rm max}$ by requiring one cluster above this mass,
+\begin{align}
+1 & = \int_{M_{\rm max}}^{+ \infty} \dfrac{{\rm d} N}{{\rm d} M} {\rm d} M = \int_{M_{\rm max}}^{+ \infty} N_M M^{-2} e^{-M / M_{\rm c}} {\rm d} M \notag \\
+& = \dfrac{N_M}{M_{\rm c}} \Gamma \left( - 1, \dfrac{M_{\max}}{M_{\rm c}} \right) ,
+\label{eq:Mmax2}
+\end{align}
+which, together with the total mass constraint in Eq.~\ref{eq:Mmax1}, gives
+\begin{align}
+M_{\rm GC} = M_{\rm c} \dfrac{\Gamma \left( 0, \dfrac{M_{\rm min}}{M_{\rm c}} \right) - \Gamma \left( 0, \dfrac{M_{\rm max}}{M_{\rm c}} \right)}{\Gamma \left( - 1, \dfrac{M_{\max}}{M_{\rm c}} \right)} .
+\label{eq:Mmax}
+\end{align}
+We solve this equation numerically for $M_{\rm max}$ in each formation event.
+
+For masses between $M_{\rm min}$ and $M_{\rm max}$, the cumulative distribution function (CDF) is
+\begin{align}
+F (< M) & = \dfrac{N (< M)}{N (< M_{\rm max})} = \dfrac{\displaystyle \int_{M_{\rm min}}^M \dfrac{{\rm d} N}{{\rm d} M} {\rm d} M}{\displaystyle \int_{M_{\rm min}}^{M_{\rm max}} \dfrac{{\rm d} N}{{\rm d} M} {\rm d} M} \notag \\
+& = \dfrac{ \Gamma \left( - 1, \dfrac{M_{\rm min}}{M_{\rm c}} \right) - \Gamma \left( - 1, \dfrac{M}{M_{\rm c}} \right)}{\Gamma \left( - 1, \dfrac{M_{\rm min}}{M_{\rm c}} \right) - \Gamma \left( - 1, \dfrac{M_{\rm max}}{M_{\rm c}} \right)} .
+\label{eq:CDF}
+\end{align}
+We draw a uniform random number $F (< M) \in [0, 1)$ and numerically invert Eq.~\ref{eq:CDF} to obtain the corresponding cluster mass.
+
+For events with $M_{\rm GC} \geqslant M_{\rm min}$, the cluster with mass $M_{\rm max}$ is included first, and additional clusters are then sampled from Eq.~\ref{eq:CDF}. If a newly sampled cluster has $M > M_{\rm r}$, where $M_{\rm r}$ is the remaining mass budget after all accepted clusters, we follow the probability-based treatment of \cite{Chen&Gnedin2023GC} and keep the candidate with probability
+\begin{align}
+P_{\rm keep} = \dfrac{M_{\rm r}}{M} .
+\label{eq:keep_probability}
+\end{align}
+The event then ends whether the final candidate is accepted or rejected. Since the expected mass contributed by this candidate is $P_{\rm keep} M = M_{\rm r}$, the expected total mass formed in clusters remains $M_{\rm GC}$.
+
+The same prescription is used when $M_{\rm GC} < M_{\rm min}$, so these low-mass events are not discarded. In this case, $M_{\rm r} = M_{\rm GC}$ at the start of the event, and a candidate with $M \geqslant M_{\rm min} > M_{\rm GC} = M_{\rm r}$ is drawn from the ICMF and accepted with the same probability in Eq.~\ref{eq:keep_probability}. Thus, low-mass formation events can still form a cluster with a small probability, while preserving the intended cluster mass budget on average.
+
+After all accepted cluster masses have been determined, the cluster list is randomly shuffled before galactocentric radii are assigned. The spatial sampling uses the cumulative cluster mass to map the ordered cluster list onto the adopted S{\'e}rsic profile. Without shuffling, the deterministically assigned $M_{\max}$ cluster is always the first object in the list and would therefore always receive the smallest enclosed mass fraction and an artificially small galactocentric radius. Randomising the order removes this numerical correlation between cluster mass and formation radius. The shuffle changes only the order of the clusters; it does not change their masses, total number, or the adopted spatial distribution.
+
+\subsection{Spatial sampling}
+\label{subsect:spatial_sampling}
+
+Main-progenitor-branch clusters are treated as in-situ objects. Clusters formed on satellite branches are first assigned positions in their own local host, before any later halo merger. If a satellite cluster survives outside the $1 \rm pc$ nuclear region until the branch merges, it is released into the recipient halo at $0.5R_{\rm vir}$ and continues evolving in the new host potential. Accreted clusters that are released after a branch merger use the representative outer radius $0.5R_{\rm vir}$. Thus, the branch on which a cluster forms determines whether its first radius is local to the main progenitor or to a satellite system.
+
+For main-progenitor and locally sampled satellite clusters, the birth radius is drawn from the deprojected S{\'e}rsic profile used by \cite{Gao+2024GC},
+\begin{align}
+\rho(r) & = \rho_0 \left(\dfrac{r}{R_{\rm e}}\right)^{-p}
+e^{-b\left(r / R_{\rm e}\right)^{1 / N_{\rm S}}},
+\label{eq:sersic_density}
+\end{align}
+where
+\begin{align}
+p & = 1 - \dfrac{0.6097}{N_{\rm S}} + \dfrac{0.05563}{N_{\rm S}^2}, \\
+b & = 2 N_{\rm S} - \dfrac{1}{3} + \dfrac{0.009876}{N_{\rm S}}.
+\end{align}
+The fiducial catalogue uses $N_{\rm S} = 2$ for the calculations presented here. As discussed in \cite{Gao+2024GC}, the $N_{\rm S}$ value does not impact the final profile much. In the analytic background, the effective radius follows the halo-spin scale \citep{Gao+2024GC}
+\begin{align}
+R_{\rm e} = \dfrac{j}{2 \sqrt{G R_{\rm vir} M_{\rm h}}} ,
+\end{align}
+where $j$ is TNG SubhaloSpin component in unit $({\rm kpc} / h) (\rm km/s)$, a mass-weighted specific angular momentum of the halo. The enclosed-mass fraction is inverted through the regularised incomplete gamma function,
+\begin{align}
+r_{\rm GC} & = R_{\rm e}
+\left[\dfrac{P^{-1}\{N_{\rm S}(3-p),u\}}{b}\right]^{N_{\rm S}},
+\end{align}
+where $u$ is the assigned enclosed mass fraction within the formation event.
+
+\subsection{Metallicity assignment}
+\label{subsubsect:metallicity_assignment}
+
+The production runs use the \cite{Chen&Gnedin2024aGC} galaxy stellar mass-metallicity relation,
+\begin{align}
+[{\rm Fe / H}]_{\rm g} (M_\star, z) & = 0.3 \log_{10} \left( \dfrac{M_\star}{10^9~M_\odot} \right) - \log_{10} (1 + z) - 0.5 + \xi_{\rm g}, \\
+\xi_{\rm g} & \sim {\cal N} (0, 0.3)
+\label{eq:mass-metal}
+\end{align}
+This relation is capped at $[{\rm Fe / H}] = 0.3$. The cluster metallicity is
+\begin{align}
+[{\rm Fe / H}]_{\rm cl} & =[{\rm Fe / H}]_{\rm g} + \xi_{\rm cl} , \\
+\xi_{\rm cl} & \sim {\cal N} (0, 0.2),
+\end{align}
+and the solar-scaled metal fraction entering the IMBH fit is
+\begin{align}
+\left( \dfrac{Z}{Z_{\odot}} \right)_{\rm Fe} & = 10^{[{\rm Fe / H}]_{\rm cl}} .
+\label{eq:metallicity_transfer}
+\end{align}
+The resulting $[\mathrm{Fe}/\mathrm{H}]_{\rm GC}$ is used for stellar-evolution bookkeeping and is converted to the solar-scaled abundance entering the IMBH fit through equation~(\ref{eq:metallicity_transfer}).
+
+\section{Cluster Evolution} \label{appx:GCevo}
+
+The evolution calculation follows every formed GC in an analytic, evolving background from its formation time to the requested final redshift. The halo mass and spin are interpolated along the relevant merger-tree branch. The dark-matter component is modelled with an NFW profile, the stellar component with a S{\'e}rsic background, and previously deposited model GCs contribute to the enclosed mass used at later timesteps. The background is updated in coarse time blocks, while the fastest-changing active object is advanced with adaptive mass-loss and orbital-decay steps.
+
+\subsection{Evolving background and orbital decay}
+
+The stellar background mass enclosed by radius $r$ is
+\begin{align}
+M_{\star}(<r) & = M_{\star} P \left[ N_{\rm S} (3 - p), b \left( \dfrac{r}{R_{\rm e}} \right)^{1 / N_{\rm S}} \right].
+\end{align}
+The associated mean background density of the smooth background is
+\begin{align}
+\rho_{\rm bg} (r) & = \dfrac{3}{4 \pi r^3} \left[ \dfrac{r^2}{G} \left| \dfrac{{\rm d}  \Phi_{\rm NFW}}{{\rm d}  r} \right| + M_\star (< r) \right] .
+\label{eq:rho_bg}
+\end{align}
+The circular velocity used for orbital decay is
+\begin{align}
+v_{\rm c} (r) = \sqrt{G \left[ \dfrac{4 \pi}{3} \rho_{\rm bg} (r) r^2 + \dfrac{M_{\rm GC} (< r)}{r} \right]}
+\label{eq:v_c}
+\end{align}
+where $M_{\rm GC} (< r)$ is the deposited cluster material already enclosed within $r$.
+
+The dynamical-friction inspiral rate is
+\begin{align}
+\dfrac{{\rm d}  r}{{\rm d}  t} & = - \dfrac{1}{0.45 r v_{\rm c} (r)} \left( \dfrac{M_{\rm GC}}{10^5~M_\odot} \right) = - f (r),
+\label{eq:DF}
+\end{align}
+where $r$ is in kpc, and $v_{\rm c}$ is in $\rm km/s$. The fourth-order Runge--Kutta update evaluates the positive inward step function $f (r)$ as
+\begin{align}
+k_1 & = f (r) \Delta t , \\
+k_2 & = f (r - k_1 / 2) \Delta t , \\
+k_3 & = f (r - k_2 / 2) \Delta t , \\
+k_4 & = f (r - k_3) \Delta t , \\
+\Delta r &= \dfrac{k_1+2k_2+2k_3+k_4}{6}.
+\end{align}
+The radius is then updated as $r\rightarrow r-\Delta r$.
+
+\subsection{Tidal stripping} \label{subsect:stripping}
+
+For the local-orbit tidal-stripping model \citep{Fragione+2019GC},
+\begin{align}
+\dfrac{{\rm d}  M_{\rm GC}}{{\rm d}  t} & = - \dfrac{2^{2/3} M_{\rm GC}^{1/3} v_{\rm c}}{r} .
+\label{eq:tidal_stripping}
+\end{align}
+Here $r$ is in $\rm pc$.
+
+\subsection{Stellar evolution} \label{subsect:stellar_evo}
+
+The stellar-evolution mass-loss fraction is represented as \citep{Conroy&Gunn2010}
+\begin{align}
+f_{\rm sw}(t) &=
+\max\left[0,\,-\dfrac{x^2}{100}+0.288x-1.42\right],\\
+x &= \log_{10}\left(\dfrac{t}{\rm yr}\right),
+\label{eq:stellar_evolution}
+\end{align}
+
+During the time-dependent evolution, the stellar-wind loss over one step is
+\begin{align}
+\Delta f_{\rm sw} &=
+f_{\rm sw}(t+\Delta t-t_{\rm form})
+-f_{\rm sw}(t-t_{\rm form}),\\
+\Delta M_{\rm sw,bound} &=
+M_{\rm init}\dfrac{M_{\rm bound}}
+{M_{\rm bound}+M_{\rm dep}}\Delta f_{\rm sw},\\
+\Delta M_{\rm sw,dep} &=
+M_{\rm init}\dfrac{M_{\rm dep}}
+{M_{\rm bound}+M_{\rm dep}}\Delta f_{\rm sw},\\
+\Delta M_{\rm tid} &=
+\left|\dfrac{{\rm d} M_{\rm GC}}{{\rm d} t}\right|\Delta t.
+\end{align}
+Here $M_{\rm bound}$ is the current bound cluster mass, $M_{\rm dep}$ is the mass already deposited by the same cluster, and $M_{\rm init}$ is its initial mass. \czkong{What's this?}
+
+\subsection{Direct tidal tearing} \label{subsect:tearing}
+
+The cluster half-mass density used for direct tidal tearing is approximated as \citep{Fragione+2019GC}
+\begin{align}
+\rho_{\rm h} & = \begin{cases}
+10^3~M_\odot/{\rm pc}^3, & M < 10^5~M_\odot,\\
+10^3 \left( \dfrac{M}{10^5~M_\odot} \right)^2~M_\odot/{\rm pc}^3, & 10^5~M_\odot \leqslant M \leqslant 10^6~M_\odot,\\
+10^5~M_\odot/{\rm pc}^3, & M > 10^6~M_\odot,
+\end{cases}
+\label{eq:rho_h}
+\end{align}
+A cluster is torn apart when its half-mass density falls below the sum of the analytic background and deposited-GC densities,
+\begin{align}
+\rho_{\rm h} < \rho_{\rm bg} + \rho_{\rm GC} .
+\end{align}
+
+\subsection{Wandering IMBH remnants} \label{subect:wanderIMBH}
+
+An IMBH-hosting GC can lose its stellar envelope before reaching the centre. This happens either when continuous stellar and tidal mass loss reduces the bound stellar mass down to the IMBH mass, or when direct tidal tearing removes the remaining stellar component. The model then deposits the residual stellar mass into the local radial bin and converts the object into a wandering IMBH\@. A wandering IMBH no longer undergoes stellar evolution or tidal stripping, but it continues to experience dynamical friction using its own mass. If it reaches $r_{\rm sink}$, it is counted as a sunk wandering IMBH; otherwise it remains as a surviving off-centre remnant at the final redshift.
+
+The adaptive time-step limits are
+\begin{align}
+\Delta t_M &= t_{\rm s,m}\dfrac{M_{\rm GC}}{|{\rm d} M_{\rm GC}/{\rm d} t|},\\
+\Delta t_r &= t_{\rm s,r}\dfrac{r}{|{\rm d} r/{\rm d} t|},\\
+\Delta t &= \min(\Delta t_M,\Delta t_r,\Delta t_{\max}),
+\end{align}
+where $t_{\rm s,m}$ and $t_{\rm s,r}$ are user-specified fractional step parameters.
+
+The radial deposition bins are logarithmic:
+\begin{align}
+b(r) &= 1+\left\lfloor
+\dfrac{\log_{10}\max(r,r_{\min})-\log_{10}r_{\min}}
+{\log_{10}r_{\max}-\log_{10}r_{\min}}
+(N_{\rm bin}-1)
+\right\rfloor ,
+\end{align}
+with the result limited to the interval $1\leq b\leq N_{\rm bin}$.
+
+%% For this sample we use BibTeX plus aasjournalv7.bst to generate the
+%% the bibliography. The sample7.bib file was populated from ADS. To
+%% get the citations to show in the compiled file do the following:
+%%
+%% pdflatex sample7.tex
+%% bibtext sample7
+%% pdflatex sample7.tex
+%% pdflatex sample7.tex
+
+\bibliography{ref}{}
+\bibliographystyle{aasjournalv7}
+
+%% This command is needed to show the entire author+affiliation list when
+%% the collaboration and author truncation commands are used.  It has to
+%% go at the end of the manuscript.
+%\allauthors
+
+%% Include this line if you are using the \added, \replaced, \deleted
+%% commands to see a summary list of all changes at the end of the article.
+%\listofchanges
+
+\end{CJK*}
+\end{document}
+
+% End of file `sample7.tex'.

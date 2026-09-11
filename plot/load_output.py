@@ -22,7 +22,22 @@ SRC_DIR = PROJECT_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from config import E, ReducedH0, Mstar_SMHM, NSC_RAD_PC, CosmicAge2Redshift, Redshift2CosmicAge  # noqa: E402
+from config import (  # noqa: E402
+    E,
+    ReducedH0,
+    Mstar_SMHM,
+    NSC_RAD_PC,
+    CosmicAge2Redshift,
+    Redshift2CosmicAge,
+    parse_exact_int64,
+)
+from evo import (  # noqa: E402
+    STAT_ALIVE,
+    STAT_DISRUPT,
+    STAT_SUNK_BH,
+    STAT_SUNK_GC,
+    STAT_WANDER,
+)
 
 
 RUN_METADATA_NAME = "run_metadata.json"
@@ -82,11 +97,10 @@ HALO_SUMMARY_COLUMN_MAP = {
     "logMh_z0": "log10_halo_mass_z0",
     "n_gc_total": "n_gc_total",
     "n_alive": "n_alive",
-    "n_wanderer": "n_wanderer",
-    "n_exhausted": "n_exhausted",
-    "n_torn": "n_torn",
+    "n_disrupt": "n_disrupt",
+    "n_wander": "n_wander",
     "n_sunk_gc": "n_sunk_gc",
-    "n_sunk_wanderer": "n_sunk_wanderer",
+    "n_sunk_bh": "n_sunk_bh",
     "n_sunk": "n_sunk",
     "m_gc_init_total_msun": "gc_mass_init_total_msun",
     "M_GC_init_tot": "gc_mass_init_total_msun",
@@ -245,23 +259,71 @@ def output_paths(out_dir: Path) -> OutputPaths:
 
 
 def read_comment_columns(path: Path) -> List[str]:
+    """Return the data-column header from a comment-prefixed table."""
+
+    header_markers = {
+        "hid_z0",
+        "halo_id_z0",
+        "gc_index_halo",
+        "lookback_time_gyr",
+        "logMh_z0",
+        "logMh_z_msun",
+    }
+    first_comment: List[str] | None = None
     with Path(path).open("r", encoding="utf-8") as fh:
         for line in fh:
             if line.startswith("#"):
                 text = line[1:].strip()
-                if text:
-                    return text.split()
+                if not text:
+                    continue
+                tokens = text.split()
+                if first_comment is None:
+                    first_comment = tokens
+                if header_markers.intersection(tokens):
+                    return tokens
+    if first_comment is not None:
+        return first_comment
     raise ValueError(f"Cannot find header columns in {path}")
 
 
 def read_headered_whitespace_table(path: Path) -> pd.DataFrame:
+    """Read a whitespace table while retaining every token as text."""
+
     columns = read_comment_columns(path)
-    raw = pd.read_csv(path, sep=r"\s+", comment="#", header=None, engine="python")
+    raw = pd.read_csv(path, sep=r"\s+", comment="#", header=None, dtype=str, engine="python")
     raw = raw.iloc[:, : len(columns)].copy()
     raw.columns = columns[: raw.shape[1]]
-    for col in raw.columns:
-        raw[col] = pd.to_numeric(raw[col], errors="coerce")
     return raw
+
+
+def _integer_values(values: object, name: str, *, non_negative: bool = False) -> np.ndarray:
+    """Parse a sequence of exact signed int64 values without a float round trip."""
+
+    raw = np.asarray(values, dtype=object).reshape(-1)
+    parsed: list[np.int64] = []
+    for index, value in enumerate(raw):
+        parsed_value = parse_exact_int64(value, name=f"{name}[{index}]")
+        if non_negative and parsed_value < 0:
+            raise ValueError(f"{name}[{index}] must be non-negative; got {parsed_value}.")
+        parsed.append(parsed_value)
+    return np.asarray(parsed, dtype=np.int64)
+
+
+def _integer_series(table: pd.DataFrame, column: str, *, non_negative: bool = False) -> pd.Series:
+    """Parse one DataFrame column as exact int64 values and preserve its index."""
+
+    values = _integer_values(table[column].to_numpy(dtype=object), column, non_negative=non_negative)
+    return pd.Series(values, index=table.index, name=column)
+
+
+def _coerce_physical_columns(table: pd.DataFrame, integer_columns: set[str]) -> pd.DataFrame:
+    """Convert non-identifier table columns to numeric physical values."""
+
+    out = table.copy()
+    for column in out.columns:
+        if column not in integer_columns:
+            out[column] = pd.to_numeric(out[column], errors="coerce")
+    return out
 
 
 def load_run_metadata(out_dir: Path) -> Dict[str, object]:
@@ -288,15 +350,20 @@ def _add_aliases(table: pd.DataFrame, aliases: dict[str, str]) -> pd.DataFrame:
 def load_allcat(path: Path) -> pd.DataFrame:
     raw = read_headered_whitespace_table(path)
     table = _rename_existing_columns(raw, ALLCAT_COLUMN_MAP)
+    integer_columns = {"halo_id_z0", "is_mpb", "subhalo_id_form", "snapshot_form"}
+    if "halo_id_z0" in table.columns:
+        table["halo_id_z0"] = _integer_series(table, "halo_id_z0", non_negative=True)
+    for column in ("is_mpb", "subhalo_id_form", "snapshot_form"):
+        if column in table.columns:
+            table[column] = _integer_series(table, column, non_negative=True)
+    table = _coerce_physical_columns(table, integer_columns)
     required = ["halo_id_z0", "log10_halo_mass_z0", "log10_halo_mass_form", "log10_stellar_mass_form", "log10_gc_mass_init", "redshift_form", "metallicity_feh"]
     missing = [name for name in required if name not in table.columns]
     if missing:
         raise ValueError(f"{path} is missing required allcat columns after normalisation: {missing}")
     table = table.dropna(subset=required).copy()
-    table["halo_id_z0"] = table["halo_id_z0"].astype(int)
-    for int_col in ["is_mpb", "subhalo_id_form", "snapshot_form"]:
-        if int_col in table.columns:
-            table[int_col] = table[int_col].astype(int)
+    if "is_mpb" in table.columns and not np.all(np.isin(table["is_mpb"].to_numpy(dtype=np.int64), np.asarray([0, 1], dtype=np.int64))):
+        raise ValueError(f"{path} contains is_mpb values other than 0 or 1.")
     table["gc_mass_init_msun"] = np.power(10.0, table["log10_gc_mass_init"].to_numpy(dtype=float))
     table["halo_mass_z0_msun"] = np.power(10.0, table["log10_halo_mass_z0"].to_numpy(dtype=float))
     table["halo_mass_form_msun"] = np.power(10.0, table["log10_halo_mass_form"].to_numpy(dtype=float))
@@ -335,12 +402,13 @@ def _add_allcat_legacy_aliases(table: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_mpb(path: Path) -> pd.DataFrame:
-    mpb = pd.read_csv(path)
+    mpb = pd.read_csv(path, dtype=str)
     for col in ["subhalo_id_z0", "SnapNum"]:
         if col not in mpb.columns:
             raise ValueError(f"MPB table is missing required column '{col}': {path}")
-    mpb["subhalo_id_z0"] = pd.to_numeric(mpb["subhalo_id_z0"], errors="coerce").astype(int)
-    mpb["SnapNum"] = pd.to_numeric(mpb["SnapNum"], errors="coerce").astype(int)
+    mpb["subhalo_id_z0"] = _integer_series(mpb, "subhalo_id_z0", non_negative=True)
+    mpb["SnapNum"] = _integer_series(mpb, "SnapNum", non_negative=True)
+    mpb = _coerce_physical_columns(mpb, {"subhalo_id_z0", "SnapNum"})
     if {"SubhaloSpin_x", "SubhaloSpin_y", "SubhaloSpin_z"}.issubset(mpb.columns):
         mpb["spin_mag"] = np.sqrt(
             np.square(pd.to_numeric(mpb["SubhaloSpin_x"], errors="coerce"))
@@ -358,26 +426,36 @@ def load_mpb(path: Path) -> pd.DataFrame:
 
 def load_final_gcs(path: Path, expected_halo_ids: np.ndarray | None = None) -> pd.DataFrame:
     table = _rename_existing_columns(read_headered_whitespace_table(path), FINAL_GC_COLUMN_MAP)
+    integer_columns = {"halo_id_z0", "gc_index_halo", "status"}
+    for column in integer_columns:
+        if column in table.columns:
+            table[column] = _integer_series(table, column, non_negative=column != "status")
+    table = _coerce_physical_columns(table, integer_columns)
     required = ["halo_id_z0", "gc_index_halo", "status", "gc_mass_final_msun"]
     missing = [name for name in required if name not in table.columns]
     if missing:
         raise ValueError(f"{path} is missing required final-GC columns after normalisation: {missing}")
     if expected_halo_ids is not None:
-        expected_halo_ids = np.asarray(expected_halo_ids, dtype=int)
+        expected_halo_ids = _integer_values(expected_halo_ids, "expected final-GC halo IDs", non_negative=True)
         if len(table) != len(expected_halo_ids):
             raise ValueError(f"{path} has {len(table)} rows, expected {len(expected_halo_ids)}")
-        halo_ids = table["halo_id_z0"].to_numpy(dtype=int)
+        halo_ids = table["halo_id_z0"].to_numpy(dtype=np.int64)
         if not np.array_equal(halo_ids, expected_halo_ids):
             raise ValueError(f"Row-order mismatch between {path} and the matching allcat_ns file")
-        expected_gc_index = np.empty(len(expected_halo_ids), dtype=int)
+        expected_gc_index = np.empty(len(expected_halo_ids), dtype=np.int64)
         for hid in np.unique(expected_halo_ids):
             idx = np.where(expected_halo_ids == int(hid))[0]
-            expected_gc_index[idx] = np.arange(1, len(idx) + 1, dtype=int)
-        if not np.array_equal(table["gc_index_halo"].to_numpy(dtype=int), expected_gc_index):
+            expected_gc_index[idx] = np.arange(1, len(idx) + 1, dtype=np.int64)
+        if not np.array_equal(table["gc_index_halo"].to_numpy(dtype=np.int64), expected_gc_index):
             raise ValueError(f"GC index ordering mismatch between {path} and the matching allcat_ns file")
-    table["status"] = table["status"].astype(int)
-    table["halo_id_z0"] = table["halo_id_z0"].astype(int)
-    table["gc_index_halo"] = table["gc_index_halo"].astype(int)
+    status = table["status"].to_numpy(dtype=np.int64)
+    valid_status = np.asarray(
+        [STAT_ALIVE, STAT_DISRUPT, STAT_SUNK_GC, STAT_SUNK_BH, STAT_WANDER],
+        dtype=int,
+    )
+    if np.any(~np.isin(status, valid_status)):
+        raise ValueError(f"{path} contains invalid status codes: {sorted(set(status[~np.isin(status, valid_status)]))}")
+    table["status"] = status
     if (table["gc_mass_final_msun"].dropna() < 0.0).any():
         raise ValueError(f"{path} contains negative final GC masses")
     table["gc_mass_final_msun"] = np.where(
@@ -391,9 +469,9 @@ def load_final_gcs(path: Path, expected_halo_ids: np.ndarray | None = None) -> p
         positive = m_final > 0.0
         log_m_final[positive] = np.log10(m_final[positive])
         table["log10_gc_mass_final"] = log_m_final
-    table["is_survivor"] = table["status"] == 1
-    table["is_sunk"] = table["status"].isin([-3, -5])
-    table["is_wanderer"] = table["status"] == -4
+    table["is_survivor"] = table["status"] == STAT_ALIVE
+    table["is_sunk"] = table["status"].isin([STAT_SUNK_GC, STAT_SUNK_BH])
+    table["is_wanderer"] = table["status"] == STAT_WANDER
     return _add_final_gcs_legacy_aliases(table).reset_index(drop=True)
 
 
@@ -423,6 +501,10 @@ def load_deposit_profile(path: Path) -> DepositProfile:
     missing = [name for name in required if name not in table.columns]
     if missing:
         raise ValueError(f"{path} is missing required deposit columns: {missing}")
+    table["halo_id_z0"] = _integer_series(table, "halo_id_z0", non_negative=True)
+    if "bin_index" in table.columns:
+        table["bin_index"] = _integer_series(table, "bin_index", non_negative=True)
+    table = _coerce_physical_columns(table, {"halo_id_z0", "bin_index"})
     halo_ids: list[int] = []
     r_inner: list[np.ndarray] = []
     r_outer: list[np.ndarray] = []
@@ -438,7 +520,7 @@ def load_deposit_profile(path: Path) -> DepositProfile:
         shell = ordered["m_star_with_evo_msun"].to_numpy(dtype=float)
         shell_mass.append(shell)
         cumulative.append(np.cumsum(shell))
-    return DepositProfile(np.asarray(halo_ids, dtype=int), r_inner, r_outer, shell_mass, cumulative)
+    return DepositProfile(np.asarray(halo_ids, dtype=np.int64), r_inner, r_outer, shell_mass, cumulative)
 
 
 def load_deposit_profile_for_redshift_summary(deposit_path: Path, summary_rows: pd.DataFrame, final_redshift: float = 0.0) -> DepositProfile:
@@ -453,13 +535,10 @@ def load_deposit_profile_for_redshift_summary(deposit_path: Path, summary_rows: 
     missing_summary = [name for name in required_summary if name not in summary.columns]
     if missing_summary:
         raise ValueError(f"Selected halo summary is missing required deposit-match columns: {missing_summary}")
-    for col in summary.columns:
-        summary[col] = pd.to_numeric(summary[col], errors="coerce")
     if summary.empty:
         raise ValueError("Selected halo summary is empty; cannot match deposit-profile blocks.")
-    if summary["halo_id_z0"].isna().any():
-        raise ValueError("Selected halo summary contains non-finite halo_id_z0 values.")
-    summary["halo_id_z0"] = summary["halo_id_z0"].astype(int)
+    summary["halo_id_z0"] = _integer_series(summary, "halo_id_z0", non_negative=True)
+    summary = _coerce_physical_columns(summary, {"halo_id_z0"})
     duplicated = summary["halo_id_z0"].duplicated(keep=False)
     if duplicated.any():
         dupes = sorted(summary.loc[duplicated, "halo_id_z0"].astype(int).unique().tolist())
@@ -477,12 +556,11 @@ def load_deposit_profile_for_redshift_summary(deposit_path: Path, summary_rows: 
     missing_deposit = [name for name in required_deposit if name not in table.columns]
     if missing_deposit:
         raise ValueError(f"{path} is missing required deposit columns: {missing_deposit}")
-    for col in required_deposit:
-        table[col] = pd.to_numeric(table[col], errors="coerce")
+    table["halo_id_z0"] = _integer_series(table, "halo_id_z0", non_negative=True)
+    table["bin_index"] = _integer_series(table, "bin_index", non_negative=True)
+    table = _coerce_physical_columns(table, {"halo_id_z0", "bin_index"})
     if table[required_deposit].isna().any().any():
         raise ValueError(f"{path} contains non-finite values in required deposit columns.")
-    table["halo_id_z0"] = table["halo_id_z0"].astype(int)
-    table["bin_index"] = table["bin_index"].astype(int)
 
     final_age_gyr = float(Redshift2CosmicAge(float(final_redshift)))
     if not np.isfinite(final_age_gyr):
@@ -523,8 +601,8 @@ def load_deposit_profile_for_redshift_summary(deposit_path: Path, summary_rows: 
 
         block = group[np.isclose(group["lookback_time_gyr"].to_numpy(dtype=float), block_lookback, rtol=0.0, atol=1.0e-8)]
         ordered = block.sort_values("bin_index")
-        bin_index = ordered["bin_index"].to_numpy(dtype=int)
-        expected = np.arange(1, len(bin_index) + 1, dtype=int)
+        bin_index = ordered["bin_index"].to_numpy(dtype=np.int64)
+        expected = np.arange(1, len(bin_index) + 1, dtype=np.int64)
         if len(bin_index) == 0 or not np.array_equal(bin_index, expected):
             raise ValueError(f"Deposit profile for halo_id_z0={hid} has non-contiguous bin_index values at lookback {block_lookback:.9g} Gyr.")
 
@@ -550,16 +628,15 @@ def load_deposit_profile_for_redshift_summary(deposit_path: Path, summary_rows: 
         shell_mass.append(shell)
         cumulative.append(np.cumsum(shell))
 
-    return DepositProfile(np.asarray(halo_ids, dtype=int), r_inner, r_outer, shell_mass, cumulative)
+    return DepositProfile(np.asarray(halo_ids, dtype=np.int64), r_inner, r_outer, shell_mass, cumulative)
 
 
 def load_halo_summary(path: Path) -> pd.DataFrame:
-    table = _rename_existing_columns(pd.read_csv(path), HALO_SUMMARY_COLUMN_MAP)
+    table = _rename_existing_columns(pd.read_csv(path, dtype=str), HALO_SUMMARY_COLUMN_MAP)
     if "halo_id_z0" not in table.columns:
         raise ValueError(f"{path} is missing required halo identifier column")
-    for col in table.columns:
-        table[col] = pd.to_numeric(table[col], errors="coerce")
-    table["halo_id_z0"] = table["halo_id_z0"].astype(int)
+    table["halo_id_z0"] = _integer_series(table, "halo_id_z0", non_negative=True)
+    table = _coerce_physical_columns(table, {"halo_id_z0"})
     if "nsc_mass_msun" in table.columns:
         nsc = table["nsc_mass_msun"].to_numpy(dtype=float)
         table["log10_nsc_mass"] = np.where(np.isfinite(nsc) & (nsc > 0.0), np.log10(nsc), np.nan)
@@ -592,7 +669,7 @@ def _add_halo_summary_legacy_aliases(table: pd.DataFrame) -> pd.DataFrame:
 
 
 def load_halo_summary_by_z(path: Path) -> pd.DataFrame:
-    table = _rename_existing_columns(pd.read_csv(path), HALO_SUMMARY_BY_Z_COLUMN_MAP)
+    table = _rename_existing_columns(pd.read_csv(path, dtype=str), HALO_SUMMARY_BY_Z_COLUMN_MAP)
     required = ["halo_id_z0", "redshift", "halo_mass_available", "log10_halo_mass_at_redshift", "nsc_mass_msun", "central_bh_mass_final_msun"]
     missing = [name for name in required if name not in table.columns]
     if missing:
@@ -602,9 +679,8 @@ def load_halo_summary_by_z(path: Path) -> pd.DataFrame:
                 "Regenerate the run output with the updated src/run.py."
             )
         raise ValueError(f"{path} is missing required columns after normalisation: {missing}")
-    for col in table.columns:
-        table[col] = pd.to_numeric(table[col], errors="coerce")
-    table["halo_id_z0"] = table["halo_id_z0"].astype(int)
+    table["halo_id_z0"] = _integer_series(table, "halo_id_z0", non_negative=True)
+    table = _coerce_physical_columns(table, {"halo_id_z0"})
     return _add_halo_summary_by_z_legacy_aliases(table)
 
 
@@ -738,8 +814,11 @@ def build_choksi_model(out_dir: Path) -> ChoksiModel:
     keep_cols = [col for col in ["status", "gc_mass_final_msun", "log10_gc_mass_final", "radius_final_kpc"] if col in final_gcs.columns]
     catalog = formed.join(final_gcs[keep_cols])
     catalog = _add_final_gcs_legacy_aliases(catalog)
-    catalog["status"] = catalog["status"].fillna(0).astype(int)
-    survivors = catalog.loc[catalog["status"] == 1].copy().reset_index(drop=True)
+    catalog["status"] = pd.Series(
+        _integer_values(catalog["status"].to_numpy(dtype=object), "aligned final-GC status codes"),
+        index=catalog.index,
+    )
+    survivors = catalog.loc[catalog["status"] == STAT_ALIVE].copy().reset_index(drop=True)
     split_threshold, _, _ = fit_metallicity_split(survivors["metallicity_feh"].to_numpy(dtype=float))
     survivors["population"] = _population_from_threshold(survivors["metallicity_feh"], split_threshold)
     survivors = survivors.loc[survivors["gc_mass_final_msun"].to_numpy(dtype=float) > 0.0].copy().reset_index(drop=True)
@@ -827,7 +906,7 @@ def build_neumayer_model(out_dir: Path, ns_value: float, nsc_radius_pc: float = 
     halo_lookup = halo_lookup.copy()
     counterparts = counterparts.copy()
     for col in ["hid_z0", "subhalo_id_z0", "file_index"]:
-        halo_lookup[col] = pd.to_numeric(halo_lookup[col], errors="raise")
+        halo_lookup[col] = _integer_series(halo_lookup, col, non_negative=True)
     for col in [
         "halo_id_z0",
         "subhalo_id_z0_dark",
@@ -936,7 +1015,15 @@ def _load_mixed_suite_inputs(out_dir: Path, require_counterparts: bool) -> tuple
             "Mixed-suite output requires the cached full-physics counterpart products, "
             f"but these files are missing: {', '.join(missing)}. Run scripts/5_build_full_physics_counterparts.py first."
         )
-    return True, pd.read_csv(halo_lookup_path), pd.read_csv(counterparts_path), json.loads(divider_path.read_text(encoding="utf-8"))
+    halo_lookup = pd.read_csv(halo_lookup_path, dtype=str)
+    for column in ("hid_z0", "subhalo_id_z0", "file_index"):
+        if column in halo_lookup.columns:
+            halo_lookup[column] = _integer_series(halo_lookup, column, non_negative=True)
+    counterparts = pd.read_csv(counterparts_path, dtype=str)
+    for column in ("halo_id_z0", "subhalo_id_z0_dark", "fp_subhalo_id_z0"):
+        if column in counterparts.columns:
+            counterparts[column] = _integer_series(counterparts, column, non_negative=True)
+    return True, halo_lookup, counterparts, json.loads(divider_path.read_text(encoding="utf-8"))
 
 
 def _add_neumayer_model_aliases(table: pd.DataFrame) -> pd.DataFrame:

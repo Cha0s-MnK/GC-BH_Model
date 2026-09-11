@@ -43,7 +43,9 @@ SRC_DIR = THIS_FILE.parent
 MAIN_SPATIAL_PATH = SRC_DIR / "main.py"
 EVO_PATH = SRC_DIR / "evo.py"
 PLOT_CHOKSI2018_PATH = PROJECT_ROOT / "plot" / "plot_Choksi+2018.py"
-PLOT_KONG_LI2026_PATH = PROJECT_ROOT / "plot" / "plot_Kong&Li2026.py"
+PLOT_KONG_LI2026A_PATH = PROJECT_ROOT / "plot" / "plot_Kong&Li2026a.py"
+PLOT_KONG_LI2026B_PATH = PROJECT_ROOT / "plot" / "plot_Kong&Li2026b.py"
+PLOT_GAO2024_PATH = PROJECT_ROOT / "plot" / "plot_Gao+2024.py"
 DATA_DIR = PROJECT_ROOT / "data"
 if not DATA_DIR.is_dir():
     DATA_DIR = PROJECT_ROOT.parent / "data"
@@ -71,11 +73,10 @@ if str(SRC_DIR) not in sys.path:
 from evo import (  # noqa: E402
     DEPOS_HEADER,
     STAT_ALIVE,
-    STAT_EXHAUSTED,
-    STAT_SUNK,
-    STAT_TORN,
-    STAT_WANDERER,
-    STAT_WANDERER_SUNK,
+    STAT_DISRUPT,
+    STAT_SUNK_BH,
+    STAT_SUNK_GC,
+    STAT_WANDER,
     evolve_single_halo,
     read_haloevo_mpb,
 )
@@ -95,7 +96,7 @@ ALLCAT_HEADER = "\n".join([
      "gc_radius_pc sigma_h_msun_pc2 M_IMBH_init"),
     "rows: one formed GC per row; finalGCs.dat uses the same row ordering",])
 ALLCAT_FMT = [
-    "%.0f",    # hid_z0
+    "%d",     # hid_z0
     "%.10e",  # logMh_z0
     "%.10e",  # logMstar_z0
     "%.10e",  # logMh_form
@@ -103,14 +104,58 @@ ALLCAT_FMT = [
     "%.10e",  # logM_form
     "%.10f",  # zform
     "%.10e",  # feh
-    "%.0f",   # isMPB
-    "%.0f",   # subfind_form
-    "%.0f",   # snap_form
+    "%d",     # isMPB
+    "%d",     # subfind_form
+    "%d",     # snap_form
     "%.10e",  # r_galaxy_kpc
     "%.10e",  # gc_radius_pc
     "%.10e",  # sigma_h_msun_pc2
     "%.10e",  # M_IMBH_init
 ]
+EXTENDED_GCINI_FMT = [
+    "%d",     # hid_z0
+    "%d",     # track_id
+    "%.10e",  # logMh_context
+    "%.10e",  # logMstar_context
+    "%.10e",  # logMgas_context
+    "%.10e",  # log10 current GC mass
+    "%.10e",  # current redshift
+    "%.10e",  # initial GC mass
+    "%.10e",  # initial redshift
+    "%.10e",  # metallicity
+    "%.10e",  # current radius
+    "%.10e",  # GC radius
+    "%.10e",  # surface density
+    "%.10e",  # initial IMBH mass
+    "%.10e",  # current IMBH mass
+    "%d",     # global_index
+    "%.10e",  # deposit channel 0
+    "%.10e",  # deposit channel 1
+    "%.10e",  # deposit channel 2
+    "%d",     # deposit_only flag
+]
+EXTENDED_GCINI_HEADER = " ".join([
+    "hid_z0",
+    "track_id",
+    "logMh_context",
+    "logMstar_context",
+    "logMgas_context",
+    "log10_current_GC_mass",
+    "current_redshift",
+    "initial_GC_mass",
+    "initial_redshift",
+    "feh",
+    "current_radius_kpc",
+    "gc_radius_pc",
+    "sigma_h_msun_pc2",
+    "M_IMBH_init",
+    "M_IMBH_current",
+    "global_index",
+    "deposit_channel_0_msun",
+    "deposit_channel_1_msun",
+    "deposit_channel_2_msun",
+    "deposit_only",
+])
 
 COMBINED_FINAL_GC_HEADER = "\n".join(
     [("halo_id_z0 gc_index_halo status M_GC_final "
@@ -129,11 +174,10 @@ HALO_SUMMARY_COLUMNS = [
     "logMh_z0",
     "n_gc_total",
     "n_alive",
-    "n_wanderer",
-    "n_exhausted",
-    "n_torn",
+    "n_disrupt",
+    "n_wander",
     "n_sunk_gc",
-    "n_sunk_wanderer",
+    "n_sunk_bh",
     "n_sunk",
     "m_gc_init_total_msun",
     "m_gc_final_total_msun",
@@ -162,11 +206,10 @@ HALO_TREE_LOOKUP_NAME = "halo_tree_lookup.csv"
 SCRATCH_DIR = Path("/lingshan/disk3/subonan/_scratch")
 VALID_EVOLUTION_STATUS = {
     STAT_ALIVE,
-    STAT_EXHAUSTED,
-    STAT_TORN,
-    STAT_SUNK,
-    STAT_WANDERER,
-    STAT_WANDERER_SUNK,
+    STAT_DISRUPT,
+    STAT_SUNK_GC,
+    STAT_SUNK_BH,
+    STAT_WANDER,
 }
 TIME_ROUNDOFF_TOL_GYR = 1.0e-5
 MIN_RAD_KPC = MIN_RAD_PC * 1.0e-3
@@ -343,7 +386,9 @@ def _remove_run_scratch_dir(path: Path) -> None:
 def _check_project_layout(
     *,
     plot_choksi2018_requested: bool,
-    plot_kong_li2026_requested: bool,
+    plot_gao2024_requested: bool,
+    plot_kong_li2026a_requested: bool,
+    plot_kong_li2026b_requested: bool,
     tree_dir: Path | None,
 ) -> tuple[Path, Path]:
     if not DATA_DIR.is_dir():
@@ -361,10 +406,20 @@ def _check_project_layout(
             f"Expected bundled High-z SMBHs repository layout under {PROJECT_ROOT}; "
             f"missing Choksi+2018 plot script: {PLOT_CHOKSI2018_PATH}"
         )
-    if plot_kong_li2026_requested and (not PLOT_KONG_LI2026_PATH.is_file()):
+    if plot_gao2024_requested and (not PLOT_GAO2024_PATH.is_file()):
         raise FileNotFoundError(
             f"Expected bundled High-z SMBHs repository layout under {PROJECT_ROOT}; "
-            f"missing Kong&Li2026 plot script: {PLOT_KONG_LI2026_PATH}"
+            f"missing Gao+2024 plot script: {PLOT_GAO2024_PATH}"
+        )
+    if plot_kong_li2026a_requested and (not PLOT_KONG_LI2026A_PATH.is_file()):
+        raise FileNotFoundError(
+            f"Expected bundled High-z SMBHs repository layout under {PROJECT_ROOT}; "
+            f"missing Kong&Li2026a plot script: {PLOT_KONG_LI2026A_PATH}"
+        )
+    if plot_kong_li2026b_requested and (not PLOT_KONG_LI2026B_PATH.is_file()):
+        raise FileNotFoundError(
+            f"Expected bundled High-z SMBHs repository layout under {PROJECT_ROOT}; "
+            f"missing Kong&Li2026b plot script: {PLOT_KONG_LI2026B_PATH}"
         )
     effective_tree_dir = tree_dir.resolve() if tree_dir is not None else DEFAULT_TREE_DIR
     if not effective_tree_dir.is_dir():
@@ -425,21 +480,53 @@ def _iter_numeric_text_lines(path: Path) -> Sequence[str]:
     return out
 
 
-def _coerce_tree_id(value: float | str) -> int:
-    """Convert fixed-tree IDs that may arrive as float-like text."""
+def _coerce_tree_id(value: object) -> int:
+    """Return one exact fixed-tree identifier as a Python integer."""
 
-    if isinstance(value, (int, np.integer)):
-        return int(value)
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            pass
-    value_float = check_finite(float(value), name="tree identifier")
-    out = int(round(value_float))
-    if abs(value_float - float(out)) > 1.0e-6:
-        raise ValueError(f"Tree identifier is not integer-like: {value}")
-    return out
+    return int(parse_exact_int64(value, name="tree identifier"))
+
+
+def _is_tree_header(token: str) -> bool:
+    """Return whether a fixed-tree first token names the column header."""
+
+    lowered = token.strip().lower()
+    return lowered.startswith("logmh") or lowered.startswith("log10_mhalo")
+
+
+def _format_typed_row(
+    row: Sequence[object],
+    formats: Sequence[str],
+    integer_columns: set[int],
+    name: str,
+) -> str:
+    """Format a mixed integer/physical row without passing it through float64."""
+
+    if len(row) != len(formats):
+        raise ValueError(f"{name} row has {len(row)} fields; expected {len(formats)}.")
+    fields: List[str] = []
+    for index, (value, format_string) in enumerate(zip(row, formats)):
+        if index in integer_columns:
+            integer = int(parse_exact_int64(value, name=f"{name} column {index}"))
+            fields.append(format_string % integer)
+        else:
+            fields.append(format_string % check_finite(value, name=f"{name} column {index}"))
+    return " ".join(fields)
+
+
+def _write_typed_rows(
+    path: Path,
+    rows: Sequence[Sequence[object]],
+    formats: Sequence[str],
+    integer_columns: set[int],
+    header: str,
+    name: str,
+) -> None:
+    """Write a mixed-schema table with decimal integer fields and physical fields."""
+
+    with Path(path).open("w", encoding="utf-8") as handle:
+        handle.write("# " + header.replace("\n", "\n# ") + "\n")
+        for row in rows:
+            handle.write(_format_typed_row(row, formats, integer_columns, name) + "\n")
 
 
 def _check_array(values: np.ndarray, name: str, *, positive: bool = False, non_negative: bool = False) -> np.ndarray:
@@ -457,6 +544,28 @@ def _check_array(values: np.ndarray, name: str, *, positive: bool = False, non_n
     return arr
 
 
+def _exact_int_column(values: object, name: str, *, non_negative: bool = False) -> np.ndarray:
+    """Parse a one-dimensional column of exact signed 64-bit integers."""
+
+    values_arr = np.asarray(values, dtype=object).reshape(-1)
+    output = np.asarray([parse_exact_int64(value, name=name) for value in values_arr], dtype=np.int64)
+    if non_negative and np.any(output < 0):
+        raise ValueError(f"{name} contains negative values.")
+    return output
+
+
+def _physical_column(values: object, name: str, *, positive: bool = False, non_negative: bool = False) -> np.ndarray:
+    """Convert one physical formation column to validated floating-point values."""
+
+    values_arr = np.asarray(values, dtype=object).reshape(-1)
+    return _check_array(
+        np.asarray([float(value) for value in values_arr], dtype=float),
+        name,
+        positive=positive,
+        non_negative=non_negative,
+    )
+
+
 def _checked_non_negative_time(value: float, name: str) -> float:
     time_value = check_finite(value, name=name)
     if time_value < -TIME_ROUNDOFF_TOL_GYR:
@@ -465,28 +574,41 @@ def _checked_non_negative_time(value: float, name: str) -> float:
 
 
 def _check_gcfin_array(gcfin_arr: np.ndarray, context: str) -> np.ndarray:
-    arr = np.asarray(gcfin_arr, dtype=float)
+    raw = np.asarray(gcfin_arr, dtype=object)
+    arr = np.array(raw, dtype=object, copy=True)
     if arr.ndim != 2 or arr.shape[1] <= 8:
         raise ValueError(f"{context} final-GC array must have at least 9 columns; got shape={arr.shape}")
-    status = arr[:, 1].astype(int)
-    if np.any(np.abs(arr[:, 1] - status.astype(float)) > 1.0e-8):
-        raise ValueError(f"{context} final-GC array has non-integer status codes.")
+    gc_index = _exact_int_column(arr[:, 0], f"{context} final-GC indices", non_negative=True)
+    if np.any(gc_index < 1):
+        raise ValueError(f"{context} final-GC indices must be positive.")
+    status = _exact_int_column(arr[:, 1], f"{context} final-GC status codes")
     invalid_status = ~np.isin(status, np.asarray(sorted(VALID_EVOLUTION_STATUS), dtype=int))
     if np.any(invalid_status):
         raise ValueError(f"{context} final-GC array has invalid status codes: {sorted(set(status[invalid_status]))}")
-    _check_array(arr[:, 2], f"{context} final GC stellar mass", non_negative=True)
-    _check_array(arr[:, 3], f"{context} initial GC mass", positive=True)
+    arr[:, 0] = gc_index
+    arr[:, 1] = status
+    for column, name, positive, non_negative in (
+        (2, "final GC stellar mass", False, True),
+        (3, "initial GC mass", True, False),
+        (6, "final radius", False, True),
+        (7, "initial radius", True, False),
+        (8, "final IMBH mass", False, True),
+    ):
+        values = _check_array(
+            np.asarray([float(value) for value in arr[:, column]], dtype=float),
+            f"{context} {name}",
+            positive=positive,
+            non_negative=non_negative,
+        )
+        arr[:, column] = values
     arr[:, 4] = np.asarray(
-        [_checked_non_negative_time(value, f"{context} final lookback time") for value in arr[:, 4]],
+        [_checked_non_negative_time(float(value), f"{context} final lookback time") for value in arr[:, 4]],
         dtype=float,
     )
     arr[:, 5] = np.asarray(
-        [_checked_non_negative_time(value, f"{context} initial lookback time") for value in arr[:, 5]],
+        [_checked_non_negative_time(float(value), f"{context} initial lookback time") for value in arr[:, 5]],
         dtype=float,
     )
-    _check_array(arr[:, 6], f"{context} final radius", non_negative=True)
-    _check_array(arr[:, 7], f"{context} initial radius", positive=True)
-    _check_array(arr[:, 8], f"{context} final IMBH mass", non_negative=True)
     return arr
 
 
@@ -497,16 +619,12 @@ def _format_combined_gcfin_row(hid: int, row: str, formation_row: np.ndarray | N
     if len(parts) <= 8:
         raise ValueError(f"Per-halo gcfin row is missing required M_IMBH_final column: {row}")
 
-    gc_index_float = check_finite(float(parts[0]), name="GC index")
-    gc_index_halo = int(round(gc_index_float))
-    if abs(gc_index_float - float(gc_index_halo)) > 1.0e-8 or gc_index_halo < 1:
-        raise ValueError(f"GC index must be a positive integer-like value in row: {row}")
+    gc_index_halo = int(parse_exact_int64(parts[0], name="GC index"))
+    if gc_index_halo < 1:
+        raise ValueError(f"GC index must be a positive integer in row: {row}")
     if gc_index_halo_override is not None:
-        gc_index_halo = int(gc_index_halo_override)
-    status_float = check_finite(float(parts[1]), name="GC evolution status")
-    status = int(round(status_float))
-    if abs(status_float - float(status)) > 1.0e-8:
-        raise ValueError(f"GC evolution status is not integer-like in row: {row}")
+        gc_index_halo = int(parse_exact_int64(gc_index_halo_override, name="GC index override"))
+    status = int(parse_exact_int64(parts[1], name="GC evolution status"))
     if status not in VALID_EVOLUTION_STATUS:
         raise ValueError(f"Invalid GC evolution status code {status} in row: {row}")
     m_gc_final = check_finite_non_negative(float(parts[2]), name="Final GC stellar mass M_GC_final")
@@ -521,15 +639,16 @@ def _format_combined_gcfin_row(hid: int, row: str, formation_row: np.ndarray | N
     M_IMBH_init = 0.0
 
     if formation_row is not None:
-        # The evolution code only knows about the compact GCini columns. The
-        # merged public table restores birth-time GC properties from allcat.
-        feh = check_finite(float(formation_row[8]), name="GC metallicity [Fe/H]")
-        if len(formation_row) > 10:
-            gc_radius_pc = check_finite_positive(float(formation_row[10]), name="GC half-mass radius")
-        if len(formation_row) > 11:
-            sigma_h_msun_pc2 = check_finite_positive(float(formation_row[11]), name="GC half-mass surface density")
-        if len(formation_row) > 12:
-            M_IMBH_init = check_finite_non_negative(float(formation_row[12]), name="Initial IMBH mass")
+        formation_values = np.asarray(formation_row, dtype=object)
+        if formation_values.ndim != 1 or formation_values.size != 13:
+            raise ValueError(
+                f"Formation rows must use the exact 13-column schema; got shape={formation_values.shape}"
+            )
+        # The merged public table restores birth-time GC properties from allcat.
+        feh = check_finite(float(formation_values[8]), name="GC metallicity [Fe/H]")
+        gc_radius_pc = check_finite_positive(float(formation_values[10]), name="GC half-mass radius")
+        sigma_h_msun_pc2 = check_finite_positive(float(formation_values[11]), name="GC half-mass surface density")
+        M_IMBH_init = check_finite_non_negative(float(formation_values[12]), name="Initial IMBH mass")
     M_IMBH_final = check_finite_non_negative(float(parts[8]), name="Final IMBH mass")
 
     return (
@@ -581,27 +700,29 @@ def _sample_deposited_stellar_mass(
 
     blocks: Dict[float, List[tuple[int, float, float, float]]] = {}
     for line in _iter_numeric_text_lines(depos_path):
-        parts = [float(value) for value in line.split()]
+        parts = line.split()
         if len(parts) >= 8:
             lookback, bin_index, r_inner, r_outer, m_star_with_evo = (
-                parts[1],
-                int(round(parts[2])),
-                parts[3],
-                parts[4],
-                parts[7],
+                float(parts[1]),
+                int(parse_exact_int64(parts[2], name=f"{depos_path} bin index")),
+                float(parts[3]),
+                float(parts[4]),
+                float(parts[7]),
             )
         elif len(parts) >= 7:
             lookback, bin_index, r_inner, r_outer, m_star_with_evo = (
-                parts[0],
-                int(round(parts[1])),
-                parts[2],
-                parts[3],
-                parts[6],
+                float(parts[0]),
+                int(parse_exact_int64(parts[1], name=f"{depos_path} bin index")),
+                float(parts[2]),
+                float(parts[3]),
+                float(parts[6]),
             )
         else:
             raise ValueError(f"Malformed deposit row in {depos_path}: {line}")
         lookback = _checked_non_negative_time(lookback, "Deposit lookback time")
-        blocks.setdefault(float(lookback), []).append((int(bin_index), float(r_inner), float(r_outer), float(m_star_with_evo)))
+        if bin_index < 1:
+            raise ValueError(f"Deposit bin index must be positive in {depos_path}: {line}")
+        blocks.setdefault(float(lookback), []).append((bin_index, r_inner, r_outer, m_star_with_evo))
 
     if not blocks:
         return DepositSample(0.0, float(z_value), _checked_non_negative_time(t_z0 - target_time, "Deposit sample lookback"), 0.0)
@@ -611,14 +732,18 @@ def _sample_deposited_stellar_mass(
         key=lambda lb: (abs((t_final - float(lb)) - target_time), t_final - float(lb)),
     )
     block_time = t_final - float(best_lookback)
-    block = np.asarray(sorted(blocks[best_lookback], key=lambda item: item[0]), dtype=float)
-    if block.ndim != 2 or block.shape[1] != 4:
-        raise ValueError(f"Malformed deposit block in {depos_path} at lookback={best_lookback}")
-    bin_index = block[:, 0].astype(int)
+    block = sorted(blocks[best_lookback], key=lambda item: item[0])
+    if len(block) == 0:
+        raise ValueError(f"Malformed empty deposit block in {depos_path} at lookback={best_lookback}")
+    bin_index = np.asarray([item[0] for item in block], dtype=np.int64)
+    r_inner = np.asarray([item[1] for item in block], dtype=float)
+    r_outer = np.asarray([item[2] for item in block], dtype=float)
+    shell = np.asarray([item[3] for item in block], dtype=float)
+    _check_array(r_inner, f"Deposit inner radii at lookback={best_lookback}")
+    _check_array(r_outer, f"Deposit outer radii at lookback={best_lookback}")
+    _check_array(shell, f"Deposit evolved stellar masses at lookback={best_lookback}", non_negative=True)
     if not np.array_equal(bin_index, np.arange(1, len(bin_index) + 1, dtype=int)):
         raise ValueError(f"Deposit block in {depos_path} has non-contiguous bin indices at lookback={best_lookback}")
-    r_inner = block[:, 1]
-    r_outer = block[:, 2]
     if abs(float(r_inner[0])) > 1.0e-12 or abs(float(r_outer[0]) - MIN_RAD_KPC) > 1.0e-8:
         raise ValueError(
             f"Deposit profile {depos_path} does not preserve the fixed [0, 1 pc] first bin "
@@ -631,7 +756,6 @@ def _sample_deposited_stellar_mass(
         )
     if np.any(np.diff(r_outer) <= 0.0):
         raise ValueError(f"Deposit block in {depos_path} has non-increasing outer radii at lookback={best_lookback}")
-    shell = np.maximum(block[:, 3], 0.0)
     cumulative = np.cumsum(shell, dtype=float)
     sample_mass = float(np.interp(aperture, np.r_[0.0, r_outer], np.r_[0.0, cumulative], right=float(cumulative[-1])))
     sample_lookback_z0 = _checked_non_negative_time(t_z0 - block_time, "Deposit sampled lookback to z=0")
@@ -653,13 +777,14 @@ def _combine_per_halo_outputs(
     """Merge temporary per-halo outputs into the single published files."""
 
     ns_tag = _ns_tag(ns_value)
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] <= 12:
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] != 13:
         raise ValueError(f"all_rows must have the 13-column formation schema; got shape={all_rows_arr.shape}")
-    halo_ids_sorted = sorted({int(hid) for hid in halo_ids})
-    hid_all = np.asarray(all_rows_arr[:, 0], dtype=int)
+    halo_ids_arr = _exact_int_column(halo_ids, "output halo IDs", non_negative=True)
+    halo_ids_sorted = sorted({int(hid) for hid in halo_ids_arr})
+    hid_all = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
     formation_rows_by_halo = {
-        int(hid): np.asarray(all_rows_arr[hid_all == int(hid)], dtype=float)
+        int(hid): np.asarray(all_rows_arr[hid_all == int(hid)], dtype=object)
         for hid in halo_ids_sorted
     }
 
@@ -679,7 +804,7 @@ def _combine_per_halo_outputs(
                 parts = row.split()
                 if len(parts) < 1:
                     raise ValueError(f"Malformed per-halo GCfin row in {src}: {row}")
-                gc_index_halo = int(float(parts[0]))
+                gc_index_halo = int(parse_exact_int64(parts[0], name=f"{src} GC index"))
                 if gc_index_halo < 1 or gc_index_halo > len(halo_rows):
                     raise ValueError(
                         f"GC index {gc_index_halo} is out of bounds for halo {hid} "
@@ -710,8 +835,8 @@ def _build_halo_summary_table(
 ) -> pd.DataFrame:
     """Build one halo-level summary table, including sampled NSC and SMBH masses."""
 
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] <= 12:
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] != 13:
         raise ValueError(f"all_rows must have the 13-column formation schema; got shape={all_rows_arr.shape}")
     n_rows = len(all_rows_arr)
     if len(status) != n_rows or len(m_final) != n_rows or len(M_IMBH_final) != n_rows:
@@ -720,13 +845,13 @@ def _build_halo_summary_table(
             f"all_rows={n_rows}, status={len(status)}, m_final={len(m_final)}, M_IMBH_final={len(M_IMBH_final)}"
         )
 
-    hid = np.asarray(all_rows_arr[:, 0], dtype=int)
-    logmh_z0 = _check_array(all_rows_arr[:, 1], "z=0 halo log mass")
-    m_init = np.power(10.0, _check_array(all_rows_arr[:, 6], "initial GC log mass"))
+    hid = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
+    logmh_z0 = _check_array(np.asarray(all_rows_arr[:, 1], dtype=float), "z=0 halo log mass")
+    m_init = np.power(10.0, _check_array(np.asarray(all_rows_arr[:, 6], dtype=float), "initial GC log mass"))
     _check_array(m_init, "initial GC mass", positive=True)
-    M_IMBH_init = _check_array(all_rows_arr[:, 12], "initial IMBH mass", non_negative=True)
+    M_IMBH_init = _check_array(np.asarray(all_rows_arr[:, 12], dtype=float), "initial IMBH mass", non_negative=True)
     M_IMBH_final = np.asarray(M_IMBH_final, dtype=float)
-    status = np.asarray(status, dtype=int)
+    status = _exact_int_column(status, "halo summary GC status codes")
     m_final = np.asarray(m_final, dtype=float)
     if np.any(~np.isin(status, np.asarray(sorted(VALID_EVOLUTION_STATUS), dtype=int))):
         raise ValueError(f"Halo summary received invalid GC status code(s): {sorted(set(status))}")
@@ -741,8 +866,8 @@ def _build_halo_summary_table(
         survivor_mask = s == STAT_ALIVE
         imbh_init = M_IMBH_init[idx]
         imbh_final = M_IMBH_final[idx]
-        n_sunk_gc = int(np.sum(s == STAT_SUNK))
-        n_sunk_wanderer = int(np.sum(s == STAT_WANDERER_SUNK))
+        n_sunk_gc = int(np.sum(s == STAT_SUNK_GC))
+        n_sunk_bh = int(np.sum(s == STAT_SUNK_BH))
         central_events = list((central_history_by_halo or {}).get(int(hid0), []))
         m_smbh_init, m_smbh_final = _central_bh_masses_at_redshift(
             central_events,
@@ -753,7 +878,7 @@ def _build_halo_summary_table(
             _tmp_product_path(Path(per_halo_dir), "depos_halo", int(hid0), str(ns_tag)),
             z_out=0.0,
         )
-        sunk_mask = np.isin(s, np.asarray([STAT_SUNK, STAT_WANDERER_SUNK], dtype=int))
+        sunk_mask = np.isin(s, np.asarray([STAT_SUNK_GC, STAT_SUNK_BH], dtype=int))
         m_imbh_final_tot = float(m_smbh_final + np.sum(imbh_final[(imbh_init > 0.0) & (~sunk_mask)]))
         rows.append(
             {
@@ -761,12 +886,11 @@ def _build_halo_summary_table(
                 "logMh_z0": float(logmh_z0[idx][0]),
                 "n_gc_total": int(np.sum(idx)),
                 "n_alive": int(np.sum(s == STAT_ALIVE)),
-                "n_wanderer": int(np.sum(s == STAT_WANDERER)),
-                "n_exhausted": int(np.sum(s == STAT_EXHAUSTED)),
-                "n_torn": int(np.sum(s == STAT_TORN)),
+                "n_disrupt": int(np.sum(s == STAT_DISRUPT)),
+                "n_wander": int(np.sum(s == STAT_WANDER)),
                 "n_sunk_gc": n_sunk_gc,
-                "n_sunk_wanderer": n_sunk_wanderer,
-                "n_sunk": n_sunk_gc + n_sunk_wanderer,
+                "n_sunk_bh": n_sunk_bh,
+                "n_sunk": n_sunk_gc + n_sunk_bh,
                 "m_gc_init_total_msun": float(np.sum(m_init[idx])),
                 "m_gc_final_total_msun": float(np.sum(m_final_halo[survivor_mask])),
                 "M_IMBH_init_tot": float(np.sum(imbh_init)),
@@ -790,10 +914,10 @@ def _interpolate_mpb_logmh_at_redshift(mpb_rows: np.ndarray, z_out: float) -> tu
 
     z_value = check_finite_non_negative(z_out, name="Output redshift z_out")
     rows = np.asarray(mpb_rows, dtype=float)
-    if rows.ndim != 2 or rows.shape[0] == 0 or rows.shape[1] < 6:
+    if rows.ndim != 2 or rows.shape[0] == 0 or rows.shape[1] < 2:
         return np.nan, 0
 
-    redshift = rows[:, 5]
+    redshift = rows[:, 1]
     logmh = rows[:, 0]
     if np.any(~np.isfinite(redshift)) or np.any(redshift < 0.0):
         raise ValueError("MPB rows contain non-finite or negative redshifts.")
@@ -866,8 +990,8 @@ def _build_halo_summary_by_z_table(
        eddington_ratio: float = 0.0) -> pd.DataFrame:
     """Build one long-format halo summary table across requested output redshifts."""
 
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] <= 12:
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] != 13:
         raise ValueError(f"all_rows must have the 13-column formation schema; got shape={all_rows_arr.shape}")
     if len(status) != len(all_rows_arr) or len(lookback_time_final_gyr) != len(all_rows_arr):
         raise ValueError(
@@ -876,7 +1000,7 @@ def _build_halo_summary_by_z_table(
         )
     _check_array(np.asarray(lookback_time_final_gyr, dtype=float), "final lookback time", non_negative=True)
 
-    hid = np.asarray(all_rows_arr[:, 0], dtype=int)
+    hid = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
     t_z0 = float(Redshift2CosmicAge(0.0, time_unit="Gyr"))
     output_redshifts = [0.0] + [check_finite_non_negative(float(z), name="Output redshift z_out") for z in out_redshifts]
     unique_hids = np.unique(hid)
@@ -955,7 +1079,7 @@ def _legacy_tree_file_map(tree_dir: Path) -> Dict[int, str]:
         if path.suffix.lower() not in (".txt", ".dat"):
             continue
         try:
-            hid = int(path.stem)
+            hid = _coerce_tree_id(path.stem)
         except ValueError:
             continue
         mapping[int(hid)] = str(path)
@@ -971,7 +1095,7 @@ def _tree_file_map(tree_dir_str: str) -> Dict[int, str]:
         with lookup_path.open("r", encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 try:
-                    hid = int(row["halo_id_z0"])
+                    hid = _coerce_tree_id(row["halo_id_z0"])
                     basename = row["fixed_tree_basename"].strip()
                 except (KeyError, ValueError) as exc:
                     raise RuntimeError(f"Malformed tree lookup row in {lookup_path}: {row}") from exc
@@ -1009,7 +1133,7 @@ def _read_full_tree_numeric(tree_path: Path) -> np.ndarray:
         for line_no, line in enumerate(handle, start=1):
             row_text = line.rstrip("\n")
             stripped = line.strip()
-            if (not stripped) or stripped.startswith("#") or stripped.lower().startswith("logmh"):
+            if (not stripped) or stripped.startswith("#") or _is_tree_header(stripped.split()[0]):
                 continue
             parts = stripped.split()
             if len(parts) < 9:
@@ -1030,23 +1154,20 @@ def _read_full_tree_numeric(tree_path: Path) -> np.ndarray:
             try:
                 parsed = [
                     float(parts[0]),
-                    int(parts[1]),
-                    int(parts[2]),
-                    int(parts[3]),
-                    int(parts[4]),
+                    parse_fixed_tree_id(parts[1], name=f"{tree_path} first progenitor ID", allow_minus_one=True),
+                    parse_fixed_tree_id(parts[2], name=f"{tree_path} subhalo ID"),
+                    parse_fixed_tree_id(parts[3], name=f"{tree_path} branch ID"),
+                    parse_fixed_tree_id(parts[4], name=f"{tree_path} descendant ID", allow_minus_one=True),
                     float(parts[5]),
                     float(parts[6]),
                     float(parts[7]),
                     float(parts[8]),
                 ]
             except ValueError as exc:
-                warnings.warn(
+                raise ValueError(
                     f"Malformed fixed-tree row in {Path(tree_path)} at physical line {line_no}: "
-                    f"expected first 9 columns as {schema}; parser error={exc}; row={row_text}",
-                    RuntimeWarning,
-                    stacklevel=2,
-                )
-                continue
+                    f"expected first 9 columns as {schema}; parser error={exc}; row={row_text}"
+                ) from exc
             rows.append(parsed)
     if not rows:
         return np.zeros((0, 9), dtype=object)
@@ -1133,9 +1254,22 @@ def _branch_merger_events_by_source(tree_rows: np.ndarray, required_branches: se
             recipient_branch = int(mpb_branch)
             z_merge = float(terminal[5])
             mpb_rows = rows[np.array([_coerce_tree_id(value) == int(mpb_branch) for value in rows[:, 3]], dtype=bool)]
-            recipient_logmh, available = _interpolate_mpb_logmh_at_redshift(mpb_rows, z_merge)
+            mpb_physical_rows = np.asarray(
+                [
+                    [
+                        float(row[0]),
+                        float(row[5]),
+                        float(row[6]),
+                        float(row[7]),
+                        float(row[8]),
+                    ]
+                    for row in mpb_rows
+                ],
+                dtype=float,
+            )
+            recipient_logmh, available = _interpolate_mpb_logmh_at_redshift(mpb_physical_rows, z_merge)
             if not available:
-                mpb_redshift = np.asarray(mpb_rows[:, 5], dtype=float)
+                mpb_redshift = np.asarray(mpb_physical_rows[:, 1], dtype=float)
                 if len(mpb_redshift) == 0:
                     raise ValueError(
                         f"Branch {branch_id} has no retained descendant row for subhalo {desc_id}, "
@@ -1191,12 +1325,12 @@ def _write_branch_tree(path: Path, tree_rows: np.ndarray, branch_id: int) -> Non
 def _branch_ids_for_rows(all_rows: np.ndarray, tree_dir: Path) -> np.ndarray:
     """Map every formation row to the fixed-tree branch where it formed."""
 
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] <= 7:
-        raise ValueError(f"Formation rows are malformed; got shape={all_rows_arr.shape}")
-    hid = np.asarray(all_rows_arr[:, 0], dtype=int)
-    _check_array(all_rows_arr[:, 3], "formation halo log mass")
-    _check_array(all_rows_arr[:, 7], "formation redshift", non_negative=True)
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] != 13:
+        raise ValueError(f"Formation rows must use the exact 13-column schema; got shape={all_rows_arr.shape}")
+    hid = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
+    _check_array(np.asarray(all_rows_arr[:, 3], dtype=float), "formation halo log mass")
+    _check_array(np.asarray(all_rows_arr[:, 7], dtype=float), "formation redshift", non_negative=True)
     branch_ids = np.empty(len(all_rows), dtype=np.int64)
     for hz0 in np.unique(hid):
         tree_path = _tree_file_for_halo(tree_dir, int(hz0))
@@ -1207,8 +1341,8 @@ def _branch_ids_for_rows(all_rows: np.ndarray, tree_dir: Path) -> np.ndarray:
         candidates_by_subfind: Dict[int, List[tuple[int, float, float]]] = {}
         for row in tree_rows:
             candidate = (_coerce_tree_id(row[3]), float(row[5]), float(row[0]))
-            for subfind in {_coerce_tree_id(row[2]), _coerce_tree_id(float(row[2]))}:
-                candidates_by_subfind.setdefault(subfind, []).append(candidate)
+            subfind = _coerce_tree_id(row[2])
+            candidates_by_subfind.setdefault(subfind, []).append(candidate)
 
         for row_index in np.where(hid == int(hz0))[0]:
             subfind = _coerce_tree_id(all_rows_arr[row_index, 2])
@@ -1216,10 +1350,10 @@ def _branch_ids_for_rows(all_rows: np.ndarray, tree_dir: Path) -> np.ndarray:
             if not candidates:
                 raise ValueError(
                     f"Cannot map formation row {row_index} in halo {int(hz0)} to a tree branch; "
-                    f"subfind_form={all_rows_arr[row_index, 2]:.10e} is absent from {tree_path}."
+                    f"subfind_form={all_rows_arr[row_index, 2]} is absent from {tree_path}."
                 )
-            zform = check_finite_non_negative(all_rows_arr[row_index, 7], name="formation redshift")
-            logmh_form = check_finite(all_rows_arr[row_index, 3], name="formation halo log mass")
+            zform = check_finite_non_negative(float(all_rows_arr[row_index, 7]), name="formation redshift")
+            logmh_form = check_finite(float(all_rows_arr[row_index, 3]), name="formation halo log mass")
             scored = [
                 (abs(z_tree - zform) + abs(logmh_tree - logmh_form), branch, z_tree, logmh_tree)
                 for branch, z_tree, logmh_tree in candidates
@@ -1244,12 +1378,12 @@ def _build_ismpb_flags(
 ) -> np.ndarray:
     """Map each formed GC to MPB/non-MPB using its formation subhalo ID."""
 
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    hid = np.asarray(all_rows_arr[:, 0], dtype=int)
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    hid = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
     if branch_ids is None:
         branch_ids_arr = _branch_ids_for_rows(all_rows_arr, tree_dir)
     else:
-        branch_ids_arr = np.asarray(branch_ids, dtype=int)
+        branch_ids_arr = _exact_int_column(branch_ids, "formation branch IDs", non_negative=True)
         if len(branch_ids_arr) != len(all_rows_arr):
             raise ValueError(
                 f"Formation branch IDs have length {len(branch_ids_arr)}; expected {len(all_rows_arr)}."
@@ -1268,7 +1402,7 @@ def _build_ismpb_flags(
 def _stable_unique_halo_ids(halo_ids: np.ndarray) -> List[int]:
     ordered: List[int] = []
     seen: set[int] = set()
-    for hid in np.asarray(halo_ids, dtype=int):
+    for hid in _exact_int_column(halo_ids, "halo IDs", non_negative=True):
         hid_int = int(hid)
         if hid_int in seen:
             continue
@@ -1286,7 +1420,7 @@ def _write_halo_tree_lookup(output_dir: Path, tree_dir: Path, halo_ids: np.ndarr
     with lookup_path.open("r", encoding="utf-8", newline="") as handle:
         for row in csv.DictReader(handle):
             try:
-                hid = int(row["halo_id_z0"])
+                hid = int(parse_exact_int64(row["halo_id_z0"], name=f"{lookup_path} halo_id_z0"))
             except (KeyError, ValueError) as exc:
                 raise RuntimeError(f"Malformed tree lookup row in {lookup_path}: {row}") from exc
             if hid in rows_by_halo:
@@ -1307,20 +1441,23 @@ def _write_halo_tree_lookup(output_dir: Path, tree_dir: Path, halo_ids: np.ndarr
                 "hid_z0": int(hid),
                 "simulation_key": row["simulation_key"].strip(),
                 "simulation": row["simulation"].strip(),
-                "subhalo_id_z0": int(row["subhalo_id_z0"]),
+                "subhalo_id_z0": int(parse_exact_int64(row["subhalo_id_z0"], name=f"{lookup_path} subhalo_id_z0")),
                 "fixed_tree_basename": row["fixed_tree_basename"].strip(),
-                "file_index": int(row["file_index"]),
+                "file_index": int(parse_exact_int64(row["file_index"], name=f"{lookup_path} file_index")),
             }
         )
 
-    pd.DataFrame(out_rows, columns=[
+    table = pd.DataFrame(out_rows, columns=[
         "hid_z0",
         "simulation_key",
         "simulation",
         "subhalo_id_z0",
         "fixed_tree_basename",
         "file_index",
-    ]).to_csv(output_dir / HALO_TREE_LOOKUP_NAME, index=False)
+    ])
+    for column in ("hid_z0", "subhalo_id_z0", "file_index"):
+        table[column] = np.asarray(table[column].tolist(), dtype=np.int64)
+    table.to_csv(output_dir / HALO_TREE_LOOKUP_NAME, index=False)
 
 
 def _build_mpb_csv_from_trees(tree_dir: Path, halo_ids: np.ndarray, z_snap: np.ndarray, out_csv: Path) -> None:
@@ -1331,8 +1468,9 @@ def _build_mpb_csv_from_trees(tree_dir: Path, halo_ids: np.ndarray, z_snap: np.n
     every time figures are generated.
     """
 
-    rows: List[Dict[str, float]] = []
-    for hid in np.unique(halo_ids.astype(int)):
+    rows: List[Dict[str, object]] = []
+    halo_ids_arr = _exact_int_column(halo_ids, "MPB output halo IDs", non_negative=True)
+    for hid in np.unique(halo_ids_arr):
         try:
             tfile = _tree_file_for_halo(tree_dir, int(hid))
         except FileNotFoundError:
@@ -1351,9 +1489,19 @@ def _build_mpb_csv_from_trees(tree_dir: Path, halo_ids: np.ndarray, z_snap: np.n
                     "SubhaloSpin_z": check_finite(float(vals[8]), name="fixed-tree spin z"),
                 }
             )
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(rows, columns=[
+        "subhalo_id_z0",
+        "SnapNum",
+        "Redshift",
+        "logMh_msun_h",
+        "SubhaloSpin_x",
+        "SubhaloSpin_y",
+        "SubhaloSpin_z",
+    ])
     if len(df) == 0:
         raise ValueError(f"No MPB rows were built from tree directory: {tree_dir}")
+    df["subhalo_id_z0"] = np.asarray(df["subhalo_id_z0"].tolist(), dtype=np.int64)
+    df["SnapNum"] = np.asarray(df["SnapNum"].tolist(), dtype=np.int64)
     df.sort_values(["subhalo_id_z0", "SnapNum"], ascending=[True, False], inplace=True)
     df.to_csv(out_csv, index=False)
 
@@ -1361,32 +1509,52 @@ def _build_mpb_csv_from_trees(tree_dir: Path, halo_ids: np.ndarray, z_snap: np.n
 def _read_main_spatial_all(path: Path) -> np.ndarray:
     """Read ``all_<Ns>.txt`` generated by ``main_spatial.py``.
 
-    The maintained modern schema is exactly 13 columns:
-    the legacy 10-column formation catalog plus fixed formation-time GC radius,
-    surface density, and IMBH mass.
+    The formation schema is exactly 13 columns, including fixed formation-time
+    GC radius, surface density, and IMBH mass.
     """
 
-    if len(_iter_numeric_text_lines(path)) == 0:
+    lines = _iter_numeric_text_lines(path)
+    if len(lines) == 0:
         raise ValueError(
             f"{path} contains no GC rows. main_spatial.py likely selected no halos in the requested "
             "descendant z=0 mass window, found no usable tree entries in the configured tree directory, "
             "or formed no GCs in the selected run."
         )
-    arr = np.loadtxt(path, comments="#", ndmin=2)
     n_expected = 13
-    if arr.ndim != 2 or arr.shape[1] != n_expected:
-        raise ValueError(f"{path} must have exactly {n_expected} columns; got shape={arr.shape}")
-    arr = arr.astype(float, copy=False)
-    _check_array(arr[:, 1], f"{path} z=0 halo log mass")
-    _check_array(arr[:, 3], f"{path} formation halo log mass")
-    _check_array(arr[:, 4], f"{path} formation stellar log mass")
-    _check_array(arr[:, 5], f"{path} formation gas log mass")
-    _check_array(arr[:, 6], f"{path} formation GC log mass")
-    _check_array(arr[:, 7], f"{path} formation redshift", non_negative=True)
-    _check_array(arr[:, 9], f"{path} initial GC radius", positive=True)
-    _check_array(arr[:, 10], f"{path} GC half-mass radius", positive=True)
-    _check_array(arr[:, 11], f"{path} GC half-mass surface density", positive=True)
-    _check_array(arr[:, 12], f"{path} initial IMBH mass", non_negative=True)
+    rows: List[List[object]] = []
+    for row_number, line in enumerate(lines, start=1):
+        parts = line.split()
+        if len(parts) != n_expected:
+            raise ValueError(f"{path} row {row_number} must have exactly {n_expected} columns; got {len(parts)}")
+        try:
+            rows.append([
+                parse_exact_int64(parts[0], name=f"{path} formation halo ID"),
+                float(parts[1]),
+                parse_exact_int64(parts[2], name=f"{path} formation subhalo ID"),
+                float(parts[3]),
+                float(parts[4]),
+                float(parts[5]),
+                float(parts[6]),
+                float(parts[7]),
+                float(parts[8]),
+                float(parts[9]),
+                float(parts[10]),
+                float(parts[11]),
+                float(parts[12]),
+            ])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Malformed formation row {row_number} in {path}: {line}; {exc}") from exc
+    arr = np.asarray(rows, dtype=object)
+    _check_array(np.asarray(arr[:, 1], dtype=float), f"{path} z=0 halo log mass")
+    _check_array(np.asarray(arr[:, 3], dtype=float), f"{path} formation halo log mass")
+    _check_array(np.asarray(arr[:, 4], dtype=float), f"{path} formation stellar log mass")
+    _check_array(np.asarray(arr[:, 5], dtype=float), f"{path} formation gas log mass")
+    _check_array(np.asarray(arr[:, 6], dtype=float), f"{path} formation GC log mass")
+    _check_array(np.asarray(arr[:, 7], dtype=float), f"{path} formation redshift", non_negative=True)
+    _check_array(np.asarray(arr[:, 9], dtype=float), f"{path} initial GC radius", positive=True)
+    _check_array(np.asarray(arr[:, 10], dtype=float), f"{path} GC half-mass radius", positive=True)
+    _check_array(np.asarray(arr[:, 11], dtype=float), f"{path} GC half-mass surface density", positive=True)
+    _check_array(np.asarray(arr[:, 12], dtype=float), f"{path} initial IMBH mass", non_negative=True)
     return arr
 
 
@@ -1397,14 +1565,14 @@ def _stable_row_order(all_rows: np.ndarray) -> np.ndarray:
     df = pd.DataFrame(
         {
             "row": np.arange(n, dtype=int),
-            "hid_z0": all_rows[:, 0].astype(int),
-            "subfind_form": all_rows[:, 2].astype(np.int64),
-            "logMh_form": np.round(all_rows[:, 3], 8),
-            "logMstar_form": np.round(all_rows[:, 4], 8),
-            "logMgas_form": np.round(all_rows[:, 5], 8),
-            "logM_form": np.round(all_rows[:, 6], 8),
-            "zform": np.round(all_rows[:, 7], 8),
-            "feh": np.round(all_rows[:, 8], 8),
+            "hid_z0": _exact_int_column(all_rows[:, 0], "formation halo IDs", non_negative=True),
+            "subfind_form": _exact_int_column(all_rows[:, 2], "formation subhalo IDs", non_negative=True),
+            "logMh_form": np.round(np.asarray(all_rows[:, 3], dtype=float), 8),
+            "logMstar_form": np.round(np.asarray(all_rows[:, 4], dtype=float), 8),
+            "logMgas_form": np.round(np.asarray(all_rows[:, 5], dtype=float), 8),
+            "logM_form": np.round(np.asarray(all_rows[:, 6], dtype=float), 8),
+            "zform": np.round(np.asarray(all_rows[:, 7], dtype=float), 8),
+            "feh": np.round(np.asarray(all_rows[:, 8], dtype=float), 8),
         }
     )
     sort_cols = [
@@ -1502,7 +1670,9 @@ def _run_main_spatial_for_ns(
 
 PLOT_RUNNERS = {
     "choksi2018": (PLOT_CHOKSI2018_PATH, "_plots_Choksi+2018", "plot_Choksi+2018.py"),
-    "kongli2026": (PLOT_KONG_LI2026_PATH, "_plots_Kong&Li2026", "plot_Kong&Li2026.py"),
+    "kongli2026a": (PLOT_KONG_LI2026A_PATH, "_plots_Kong&Li2026a", "plot_Kong&Li2026a.py"),
+    "kongli2026b": (PLOT_KONG_LI2026B_PATH, "_plots_Kong&Li2026b", "plot_Kong&Li2026b.py"),
+    "gao2024": (PLOT_GAO2024_PATH, "_plots_Gao+2024", "plot_Gao+2024.py"),
 }
 
 
@@ -1536,22 +1706,22 @@ def _build_allcat_table(
 ) -> np.ndarray:
     """Assemble the plotting-facing allcat schema from main_spatial output."""
 
-    all_rows_arr = np.asarray(all_rows, dtype=float)
-    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] <= 12:
+    all_rows_arr = np.asarray(all_rows, dtype=object)
+    if all_rows_arr.ndim != 2 or all_rows_arr.shape[1] != 13:
         raise ValueError(f"all_rows must have the 13-column formation schema; got shape={all_rows_arr.shape}")
-    hid_z0 = all_rows_arr[:, 0].astype(int)
-    logmh_z0 = _check_array(all_rows_arr[:, 1], "z=0 halo log mass")
-    subfind_form = all_rows_arr[:, 2].astype(np.int64)
-    logmh_form = _check_array(all_rows_arr[:, 3], "formation halo log mass")
-    logmstar_form = _check_array(all_rows_arr[:, 4], "formation stellar log mass")
-    _check_array(all_rows_arr[:, 5], "formation gas log mass")
-    logm_form = _check_array(all_rows_arr[:, 6], "formation GC log mass")
-    z_form = _check_array(all_rows_arr[:, 7], "formation redshift", non_negative=True)
-    feh = _check_array(all_rows_arr[:, 8], "formation metallicity")
-    r_init = _check_array(all_rows_arr[:, 9], "initial GC radius", positive=True)
-    gc_radius_pc = _check_array(all_rows_arr[:, 10], "GC half-mass radius", positive=True)
-    sigma_h_msun_pc2 = _check_array(all_rows_arr[:, 11], "GC half-mass surface density", positive=True)
-    M_IMBH_init = _check_array(all_rows_arr[:, 12], "initial IMBH mass", non_negative=True)
+    hid_z0 = _exact_int_column(all_rows_arr[:, 0], "formation halo IDs", non_negative=True)
+    logmh_z0 = _check_array(np.asarray(all_rows_arr[:, 1], dtype=float), "z=0 halo log mass")
+    subfind_form = _exact_int_column(all_rows_arr[:, 2], "formation subhalo IDs", non_negative=True)
+    logmh_form = _check_array(np.asarray(all_rows_arr[:, 3], dtype=float), "formation halo log mass")
+    logmstar_form = _check_array(np.asarray(all_rows_arr[:, 4], dtype=float), "formation stellar log mass")
+    _check_array(np.asarray(all_rows_arr[:, 5], dtype=float), "formation gas log mass")
+    logm_form = _check_array(np.asarray(all_rows_arr[:, 6], dtype=float), "formation GC log mass")
+    z_form = _check_array(np.asarray(all_rows_arr[:, 7], dtype=float), "formation redshift", non_negative=True)
+    feh = _check_array(np.asarray(all_rows_arr[:, 8], dtype=float), "formation metallicity")
+    r_init = _check_array(np.asarray(all_rows_arr[:, 9], dtype=float), "initial GC radius", positive=True)
+    gc_radius_pc = _check_array(np.asarray(all_rows_arr[:, 10], dtype=float), "GC half-mass radius", positive=True)
+    sigma_h_msun_pc2 = _check_array(np.asarray(all_rows_arr[:, 11], dtype=float), "GC half-mass surface density", positive=True)
+    M_IMBH_init = _check_array(np.asarray(all_rows_arr[:, 12], dtype=float), "initial IMBH mass", non_negative=True)
 
     mstar_z0 = np.asarray([Mstar_SMHM(Mhalo=10.0 ** m, z=0.0, scatter=False) for m in logmh_z0], dtype=float)
     _check_array(mstar_z0, "z=0 stellar mass from SMHM", positive=True)
@@ -1559,45 +1729,52 @@ def _build_allcat_table(
     snap_form = _nearest_snap(z_form, z_snap)
     is_mpb = _build_ismpb_flags(all_rows_arr, tree_dir, branch_ids=branch_ids)
 
-    return np.column_stack([
-        hid_z0.astype(float),
-        logmh_z0,
-        logmstar_z0,
-        logmh_form,
-        logmstar_form,
-        logm_form,
-        z_form,
-        feh,
-        is_mpb.astype(float),
-        subfind_form.astype(float),
-        snap_form.astype(float),
-        r_init,
-        gc_radius_pc,
-        sigma_h_msun_pc2,
-        M_IMBH_init,])
+    rows = [
+        [
+            np.int64(hid_z0[index]),
+            float(logmh_z0[index]),
+            float(logmstar_z0[index]),
+            float(logmh_form[index]),
+            float(logmstar_form[index]),
+            float(logm_form[index]),
+            float(z_form[index]),
+            float(feh[index]),
+            np.int64(is_mpb[index]),
+            np.int64(subfind_form[index]),
+            np.int64(snap_form[index]),
+            float(r_init[index]),
+            float(gc_radius_pc[index]),
+            float(sigma_h_msun_pc2[index]),
+            float(M_IMBH_init[index]),
+        ]
+        for index in range(len(hid_z0))
+    ]
+    return np.asarray(rows, dtype=object)
 
 def _state_from_formation_row(global_index: int, row: np.ndarray) -> dict:
-    row_arr = np.asarray(row, dtype=float)
-    if row_arr.ndim != 1 or len(row_arr) <= 12:
-        raise ValueError(f"Formation row {int(global_index)} is malformed; got shape={row_arr.shape}")
-    m_init = check_finite_positive(10.0 ** check_finite(row_arr[6], name="initial GC log mass"), name="initial GC mass")
-    current_z = check_finite_non_negative(row_arr[7], name="formation redshift")
-    current_r = check_finite_positive(row_arr[9], name="initial GC radius")
-    gc_radius_pc = check_finite_positive(row_arr[10], name="GC half-mass radius")
-    sigma_h_msun_pc2 = check_finite_positive(row_arr[11], name="GC half-mass surface density")
-    M_IMBH_init = check_finite_non_negative(row_arr[12], name="initial IMBH mass")
+    row_arr = np.asarray(row, dtype=object)
+    if row_arr.ndim != 1 or row_arr.size != 13:
+        raise ValueError(
+            f"Formation row {int(global_index)} must use the exact 13-column schema; got shape={row_arr.shape}"
+        )
+    m_init = check_finite_positive(10.0 ** check_finite(float(row_arr[6]), name="initial GC log mass"), name="initial GC mass")
+    current_z = check_finite_non_negative(float(row_arr[7]), name="formation redshift")
+    current_r = check_finite_positive(float(row_arr[9]), name="initial GC radius")
+    gc_radius_pc = check_finite_positive(float(row_arr[10]), name="GC half-mass radius")
+    sigma_h_msun_pc2 = check_finite_positive(float(row_arr[11]), name="GC half-mass surface density")
+    M_IMBH_init = check_finite_non_negative(float(row_arr[12]), name="initial IMBH mass")
     return {
         "global_index": int(global_index),
-        "hid_z0": int(row_arr[0]),
-        "track_id": int(row_arr[2]),
-        "logMh_context": check_finite(row_arr[3], name="formation halo log mass"),
-        "logMstar_context": check_finite(row_arr[4], name="formation stellar log mass"),
-        "logMgas_context": check_finite(row_arr[5], name="formation gas log mass"),
+        "hid_z0": int(parse_exact_int64(row_arr[0], name="formation halo ID")),
+        "track_id": int(parse_exact_int64(row_arr[2], name="formation subhalo ID")),
+        "logMh_context": check_finite(float(row_arr[3]), name="formation halo log mass"),
+        "logMstar_context": check_finite(float(row_arr[4]), name="formation stellar log mass"),
+        "logMgas_context": check_finite(float(row_arr[5]), name="formation gas log mass"),
         "current_mass_msun": m_init,
         "current_z": current_z,
         "M_GC_init": m_init,
         "z_GC_init": current_z,
-        "feh": check_finite(row_arr[8], name="formation metallicity"),
+        "feh": check_finite(float(row_arr[8]), name="formation metallicity"),
         "current_r_kpc": current_r,
         "r_init_kpc": current_r,
         "gc_radius_pc": gc_radius_pc,
@@ -1608,7 +1785,7 @@ def _state_from_formation_row(global_index: int, row: np.ndarray) -> dict:
 
 
 def _extended_gcini_rows_from_states(states: Sequence[dict]) -> np.ndarray:
-    rows: List[List[float]] = []
+    rows: List[List[object]] = []
     for state in states:
         deposit_only = bool(state.get("deposit_only", False))
         if deposit_only:
@@ -1629,8 +1806,8 @@ def _extended_gcini_rows_from_states(states: Sequence[dict]) -> np.ndarray:
             _check_array(depo_channels, "deposit-only continuation channels", non_negative=True)
         rows.append(
             [
-                float(state["hid_z0"]),
-                float(state["track_id"]),
+                np.int64(parse_exact_int64(state["hid_z0"], name="continuation halo ID")),
+                np.int64(parse_exact_int64(state["track_id"], name="continuation subhalo ID")),
                 float(state["logMh_context"]),
                 float(state["logMstar_context"]),
                 float(state["logMgas_context"]),
@@ -1644,14 +1821,14 @@ def _extended_gcini_rows_from_states(states: Sequence[dict]) -> np.ndarray:
                 sigma_h_msun_pc2,
                 M_IMBH_init,
                 M_IMBH_current,
-                float(state["global_index"]),
+                np.int64(parse_exact_int64(state["global_index"], name="continuation global index")),
                 float(depo_channels[0]),
                 float(depo_channels[1]),
                 float(depo_channels[2]),
-                1.0 if deposit_only else 0.0,
+                np.int64(1 if deposit_only else 0),
             ]
         )
-    return np.asarray(rows, dtype=float)
+    return np.asarray(rows, dtype=object)
 
 
 def _deposit_only_state_from_state(state: dict, channels_msun: np.ndarray, *, current_z: float) -> dict:
@@ -1668,7 +1845,84 @@ def _deposit_only_state_from_state(state: dict, channels_msun: np.ndarray, *, cu
     imported["M_IMBH_current"] = 0.0
     imported["deposit_only"] = True
     imported["depo_channels_msun"] = channels.astype(float)
+    provenance = state.get("deposit_provenance")
+    if provenance is None:
+        provenance = (
+            int(parse_exact_int64(state["hid_z0"], name="deposit provenance halo ID")),
+            abs(int(parse_exact_int64(state["global_index"], name="deposit provenance global index"))),
+        )
+    imported["deposit_provenance"] = tuple(provenance)
     return imported
+
+
+def _terminal_deposit_bin_mask(depos_path: Path, depo_array: np.ndarray) -> np.ndarray:
+    """Select complete terminal deposition bins whose inner edge is below 6 pc."""
+
+    deposition = np.asarray(depo_array, dtype=float)
+    if deposition.ndim != 2 or deposition.shape[1] != 3:
+        raise ValueError(f"Deposition array must have shape (n_bin, 3); got {deposition.shape}")
+    n_bins = deposition.shape[0]
+    lines = _iter_numeric_text_lines(depos_path)
+    if n_bins < 1 or len(lines) == 0 or len(lines) % n_bins != 0:
+        raise ValueError(
+            f"{depos_path} does not contain complete repeated deposition blocks of {n_bins} bins."
+        )
+    terminal_lines = lines[-n_bins:]
+    parsed_rows: List[tuple[int, float, float, float, float, float, float]] = []
+    for line in terminal_lines:
+        parts = line.split()
+        if len(parts) < 7:
+            raise ValueError(f"Malformed terminal deposition row in {depos_path}: {line}")
+        try:
+            parsed_rows.append(
+                (
+                    int(parse_exact_int64(parts[1], name=f"{depos_path} deposition bin index")),
+                    float(parts[2]),
+                    float(parts[3]),
+                    float(parts[4]),
+                    float(parts[5]),
+                    float(parts[6]),
+                    float(parts[0]),
+                )
+            )
+        except ValueError as exc:
+            raise ValueError(f"Malformed terminal deposition row in {depos_path}: {line}; {exc}") from exc
+    bin_indices = np.asarray([row[0] for row in parsed_rows], dtype=np.int64)
+    if not np.array_equal(bin_indices, np.arange(1, n_bins + 1, dtype=np.int64)):
+        raise ValueError(f"Terminal deposition block in {depos_path} has non-contiguous bin indices.")
+    r_inner = np.asarray([row[1] for row in parsed_rows], dtype=float)
+    r_outer = np.asarray([row[2] for row in parsed_rows], dtype=float)
+    channels = np.asarray([row[3:6] for row in parsed_rows], dtype=float)
+    lookback = np.asarray([row[6] for row in parsed_rows], dtype=float)
+    if (
+        np.any(~np.isfinite(r_inner))
+        or np.any(~np.isfinite(r_outer))
+        or np.any(~np.isfinite(channels))
+        or np.any(~np.isfinite(lookback))
+    ):
+        raise ValueError(f"Terminal deposition block in {depos_path} contains non-finite values.")
+    if np.any(channels < 0.0):
+        raise ValueError(f"Terminal deposition block in {depos_path} contains negative channels.")
+    if abs(float(r_inner[0])) > 1.0e-12 or np.any(r_outer <= r_inner):
+        raise ValueError(f"Terminal deposition block in {depos_path} has invalid radial edges or widths.")
+    if np.any(np.abs(r_inner[1:] - r_outer[:-1]) > 1.0e-10):
+        raise ValueError(f"Terminal deposition block in {depos_path} has non-contiguous radial edges.")
+    selected = r_inner < NSC_RAD_KPC
+    if not np.any(selected):
+        raise ValueError(f"Terminal deposition block in {depos_path} has no bin inside the 6 pc aperture.")
+    return selected
+
+
+def _imported_deposition_channels(depo_array: np.ndarray, selected_bins: np.ndarray) -> np.ndarray:
+    """Convert selected solver deposition bins to one three-channel mass vector."""
+
+    deposition = np.asarray(depo_array, dtype=float)
+    selected = np.asarray(selected_bins, dtype=bool)
+    if deposition.ndim != 2 or deposition.shape[1] != 3 or len(selected) != deposition.shape[0]:
+        raise ValueError("Selected deposition bins do not match the per-GC deposition array.")
+    selected_sum = np.sum(deposition[selected, :], axis=0)
+    _check_array(selected_sum, "selected imported deposition channels", non_negative=True)
+    return 1.0e5 * selected_sum
 
 
 def _required_branch_events(tree_rows: np.ndarray, initial_branches: set[int], mpb_branch: int) -> Dict[int, BranchMergerEvent]:
@@ -1846,13 +2100,13 @@ def _evolve_one_segmented_branch_task(
     )
     survivors: List[dict] = []
     depo_imports: List[dict] = []
+    depo_import_provenance: set[tuple[object, ...]] = set()
     deposit_path: str | None = None
     deposit_shift_gyr: float | None = None
 
     def finalise_state(state: dict, out_row: np.ndarray) -> None:
-        status_float = check_finite(float(out_row[1]), name="GC evolution status")
-        status_i = int(round(status_float))
-        if abs(status_float - float(status_i)) > 1.0e-8 or status_i not in VALID_EVOLUTION_STATUS:
+        status_i = int(parse_exact_int64(out_row[1], name="GC evolution status"))
+        if status_i not in VALID_EVOLUTION_STATUS:
             raise ValueError(f"Halo {hz0_i} branch {branch} has invalid segmented-evolution status {out_row[1]}")
         m_final_i = check_finite_non_negative(float(out_row[2]), name="segmented final GC stellar mass")
         r_final_i = check_finite_non_negative(float(out_row[6]), name="segmented final GC radius")
@@ -1886,11 +2140,13 @@ def _evolve_one_segmented_branch_task(
                     state["z_GC_init"] = final_redshift
 
         gcini_segment = tmp_work_dir_p / f"gcini_halo{hz0_i}_branch{branch}_seg_ns{ns_tag}.txt"
-        np.savetxt(
+        _write_typed_rows(
             gcini_segment,
             _extended_gcini_rows_from_states(live_states),
-            fmt="%.10e",
-            header=FINAL_GC_HEADER,
+            EXTENDED_GCINI_FMT,
+            {0, 1, 15, 19},
+            EXTENDED_GCINI_HEADER,
+            "extended GCini",
         )
         tree_segment = _tmp_product_path(
             tmp_work_dir_p,
@@ -1927,6 +2183,14 @@ def _evolve_one_segmented_branch_task(
             inventory_redshifts=[0.0] + [float(z) for z in out_redshifts],
         )
         gcfin_arr = _check_gcfin_array(gcfin_arr, f"halo {hz0_i} branch {branch}")
+        depo_arr = np.asarray(depo_arr, dtype=float)
+        if depo_arr.ndim != 3 or depo_arr.shape[0] != len(live_states):
+            raise ValueError(
+                f"Halo {hz0_i} branch {branch} returned deposition shape {depo_arr.shape} "
+                f"for {len(live_states)} input states."
+            )
+        _check_array(depo_arr, f"halo {hz0_i} branch {branch} deposition channels", non_negative=True)
+        selected_deposit_bins = _terminal_deposit_bin_mask(depos_segment, depo_arr[0])
         for z_value, inventory in local_imbh_inventory.items():
             z_key = check_finite_non_negative(float(z_value), name="IMBH inventory redshift")
             imbh_inventory_by_z[z_key] = imbh_inventory_by_z.get(z_key, 0.0) + check_finite_non_negative(
@@ -1952,17 +2216,19 @@ def _evolve_one_segmented_branch_task(
         for state, out_row, depo_i in zip(live_states, gcfin_arr, depo_arr):
             if bool(state.get("deposit_only", False)):
                 if branch != mpb_branch_i:
-                    channels_msun = 1.0e5 * np.asarray(depo_i[0, :], dtype=float)
+                    channels_msun = _imported_deposition_channels(depo_i, selected_deposit_bins)
                     if float(np.sum(channels_msun)) > 0.0:
-                        depo_imports.append(
-                            _deposit_only_state_from_state(
-                                state,
-                                channels_msun,
-                                current_z=float(final_redshift),
-                            )
+                        continued_depo = _deposit_only_state_from_state(
+                            state,
+                            channels_msun,
+                            current_z=float(final_redshift),
                         )
+                        provenance = tuple(continued_depo["deposit_provenance"])
+                        if provenance not in depo_import_provenance:
+                            depo_import_provenance.add(provenance)
+                            depo_imports.append(continued_depo)
                 continue
-            status_i = int(out_row[1])
+            status_i = int(parse_exact_int64(out_row[1], name="segmented evolution status"))
             m_stellar = check_finite_non_negative(
                 float(out_row[2]),
                 name="segmented survivor stellar mass",
@@ -1972,17 +2238,19 @@ def _evolve_one_segmented_branch_task(
                 name="segmented survivor IMBH mass",
             )
             if branch != mpb_branch_i:
-                channels_msun = 1.0e5 * np.asarray(depo_i[0, :], dtype=float)
+                channels_msun = _imported_deposition_channels(depo_i, selected_deposit_bins)
                 if float(np.sum(channels_msun)) > 0.0:
-                    depo_imports.append(
-                        _deposit_only_state_from_state(
-                            state,
-                            channels_msun,
-                            current_z=float(final_redshift),
-                        )
+                    continued_depo = _deposit_only_state_from_state(
+                        state,
+                        channels_msun,
+                        current_z=float(final_redshift),
                     )
-            if status_i in (1, -4) and branch != mpb_branch_i:
-                current_mass = M_IMBH_current if status_i == -4 else m_stellar + M_IMBH_current
+                    provenance = tuple(continued_depo["deposit_provenance"])
+                    if provenance not in depo_import_provenance:
+                        depo_import_provenance.add(provenance)
+                        depo_imports.append(continued_depo)
+            if status_i in (STAT_ALIVE, STAT_WANDER) and branch != mpb_branch_i:
+                current_mass = M_IMBH_current if status_i == STAT_WANDER else m_stellar + M_IMBH_current
                 if current_mass > 0.0:
                     continued = dict(state)
                     continued["current_mass_msun"] = float(current_mass)
@@ -2061,19 +2329,19 @@ def _evolve_one_segmented_halo_task(
     """Evolve one halo with dependency-aware branch continuation."""
 
     tmp_work_dir_p = Path(tmp_work_dir)
-    halo_rows_arr = np.asarray(halo_rows, dtype=float)
-    halo_global_indices_arr = np.asarray(halo_global_indices, dtype=int)
-    branch_ids_arr = np.asarray(branch_ids, dtype=int)
+    halo_rows_arr = np.asarray(halo_rows, dtype=object)
+    halo_global_indices_arr = _exact_int_column(halo_global_indices, "halo global indices", non_negative=True)
+    branch_ids_arr = _exact_int_column(branch_ids, "halo branch IDs", non_negative=True)
     tree_rows_arr = np.asarray(tree_rows, dtype=object)
     satellite_jobs = _validate_worker_count(satellite_jobs, "satellite_jobs")
     if len(halo_rows_arr) != len(halo_global_indices_arr) or len(halo_rows_arr) != len(branch_ids_arr):
         raise ValueError(f"Halo {int(hz0)} has inconsistent segmented-evolution input lengths.")
-    if halo_rows_arr.ndim != 2 or halo_rows_arr.shape[1] <= 12:
+    if halo_rows_arr.ndim != 2 or halo_rows_arr.shape[1] != 13:
         raise ValueError(f"Halo {int(hz0)} segmented formation rows are malformed; got shape={halo_rows_arr.shape}")
     if np.any(branch_ids_arr < 0):
         raise ValueError(f"Halo {int(hz0)} has negative branch IDs.")
-    _check_array(halo_rows_arr[:, 7], f"halo {int(hz0)} formation redshifts", non_negative=True)
-    _check_array(halo_rows_arr[:, 9], f"halo {int(hz0)} initial GC radii", positive=True)
+    _check_array(np.asarray(halo_rows_arr[:, 7], dtype=float), f"halo {int(hz0)} formation redshifts", non_negative=True)
+    _check_array(np.asarray(halo_rows_arr[:, 9], dtype=float), f"halo {int(hz0)} initial GC radii", positive=True)
     t_z0 = float(Redshift2CosmicAge(0.0, time_unit="Gyr"))
 
     mpb_branch = _mpb_branch_id(tree_rows_arr)
@@ -2224,7 +2492,13 @@ def _evolve_one_segmented_halo_task(
         for row in _iter_numeric_text_lines(deposit_path):
             shifted = _shift_depos_row_lookback(row, float(mpb_result.deposit_shift_gyr))
             parts = shifted.split()
-            depos_rows.append((float(parts[0]), int(float(parts[1])), shifted))
+            depos_rows.append(
+                (
+                    float(parts[0]),
+                    int(parse_exact_int64(parts[1], name=f"{deposit_path} bin index")),
+                    shifted,
+                )
+            )
 
     missing = [int(idx) for idx in halo_global_indices_arr if int(idx) not in final_records]
     if missing:
@@ -2338,15 +2612,16 @@ def _run_single_ns_pipeline(
     # The raw all_<Ns>.txt order depends on legacy tree traversal and can vary
     # with filesystem order. Sorting once here makes later ns-to-ns comparisons
     # and merged output tables deterministic.
-    all_rows = np.array(all_rows_raw[row_order], dtype=float, copy=True)
-    invalid_initial_r = (~np.isfinite(all_rows[:, 9])) | (all_rows[:, 9] <= 0.0)
+    all_rows = np.array(all_rows_raw[row_order], dtype=object, copy=True)
+    initial_radii = np.asarray(all_rows[:, 9], dtype=float)
+    invalid_initial_r = (~np.isfinite(initial_radii)) | (initial_radii <= 0.0)
     if np.any(invalid_initial_r):
         raise ValueError(
             f"{all_path} contains {int(np.sum(invalid_initial_r))} invalid initial GC radii "
             "after formation-time validation."
         )
 
-    hid_z0 = all_rows[:, 0].astype(int)
+    hid_z0 = _exact_int_column(all_rows[:, 0], "formation halo IDs", non_negative=True)
     m_final = np.zeros(len(all_rows), dtype=float)
     M_IMBH_final = np.asarray(all_rows[:, 12], dtype=float).copy()
     lookback_time_final = np.zeros(len(all_rows), dtype=float)
@@ -2366,8 +2641,8 @@ def _run_single_ns_pipeline(
             hz0_ret, status_h, m_final_h, lookback_time_final_h, r_final_h, M_IMBH_final_h, central_history, _imbh_inventory = _evolve_one_segmented_halo_task(
                 hz0=int(hz0),
                 halo_global_indices=idx.astype(int),
-                halo_rows=np.array(all_rows[idx, :], dtype=float, copy=True),
-                branch_ids=np.array(branch_ids[idx], dtype=int, copy=True),
+                halo_rows=np.array(all_rows[idx, :], dtype=object, copy=True),
+                branch_ids=np.array(branch_ids[idx], dtype=np.int64, copy=True),
                 tree_rows=_read_full_tree_numeric(_tree_file_for_halo(tree_dir, int(hz0))),
                 ns=float(ns),
                 ns_tag=ns_tag,
@@ -2394,8 +2669,8 @@ def _run_single_ns_pipeline(
                     _evolve_one_segmented_halo_task,
                     hz0=int(hz0),
                     halo_global_indices=idx.astype(int),
-                    halo_rows=np.array(all_rows[idx, :], dtype=float, copy=True),
-                    branch_ids=np.array(branch_ids[idx], dtype=int, copy=True),
+                    halo_rows=np.array(all_rows[idx, :], dtype=object, copy=True),
+                    branch_ids=np.array(branch_ids[idx], dtype=np.int64, copy=True),
                     tree_rows=_read_full_tree_numeric(_tree_file_for_halo(tree_dir, int(hz0))),
                     ns=float(ns),
                     ns_tag=ns_tag,
@@ -2428,7 +2703,14 @@ def _run_single_ns_pipeline(
         branch_ids=branch_ids,
     )
     allcat_path = output_dir / f"allcat_s-0_p2-{p2_tag}_p3-{p3_tag}.txt"
-    np.savetxt(allcat_path, allcat, fmt=ALLCAT_FMT, header=ALLCAT_HEADER)
+    _write_typed_rows(
+        allcat_path,
+        allcat,
+        ALLCAT_FMT,
+        {0, 8, 9, 10},
+        ALLCAT_HEADER,
+        "allcat",
+    )
 
     _combine_per_halo_outputs(
         per_halo_dir=tmp_gcini_dir,
@@ -2440,7 +2722,7 @@ def _run_single_ns_pipeline(
 
     summary_df = pd.DataFrame(
         {
-            "hid_z0": hid_z0.astype(int),
+            "hid_z0": np.asarray(hid_z0, dtype=np.int64),
             "status": status.astype(int),
             "M_GC_final": m_final,
             "M_IMBH_init": np.asarray(all_rows[:, 12], dtype=float),
@@ -2471,7 +2753,7 @@ def _run_single_ns_pipeline(
         eddington_ratio=eddington_ratio,
     )
     halo_summary_by_z_df.to_csv(output_dir / "haloSummaryByZ.csv", index=False, float_format="%.17g")
-    return float(ns), allcat[:, 0].astype(int), summary_df, halo_summary_df, halo_summary_by_z_df
+    return float(ns), _exact_int_column(allcat[:, 0], "allcat halo IDs", non_negative=True), summary_df, halo_summary_df, halo_summary_by_z_df
 
 
 def main() -> None:
@@ -2511,7 +2793,7 @@ def main() -> None:
     # Formation-model parameters passed directly to main_spatial.py.
     parser.add_argument("--p2", type=float, default=6.75, help="GC formation-efficiency normalization in M_GC = 3e-5 * p2 * M_gas / f_b")
     parser.add_argument("--p3", type=float, default=0.5, help="threshold in ((Delta M_h / M_h) / Delta t) above which a GC formation event is triggered")
-    parser.add_argument("--lg_cut-off_mass", dest="lg_cut_off_mass", type=float, default=12.0, help="log10 Schechter cutoff mass Mc in Msun for the GC initial mass function")
+    parser.add_argument("--lg_cut-off_mass", dest="lg_cut_off_mass", type=float, default=7.0, help="log10 Schechter cutoff mass Mc in Msun for the GC initial mass function")
     parser.add_argument(
         "--Mmin",
         type=float,
@@ -2519,7 +2801,7 @@ def main() -> None:
         help=(
             "minimum initial GC mass Mmin in linear Msun (default: 1e5); "
             "finite and positive and less than 1e6 Msun; controls the CIMF "
-            "lower endpoint and event-budget eligibility"
+            "lower endpoint; every positive event budget is sampled with full-draw acceptance"
         ),
     )
     parser.add_argument(
@@ -2573,10 +2855,22 @@ def main() -> None:
         help="Run plot/plot_Choksi+2018.py automatically after the simulation and write figures to <output>/_plots_Choksi+2018.",
     )
     parser.add_argument(
-        "--plot_KongLi2026",
-        dest="plot_kongli2026",
+        "--plot_Gao+2024",
+        dest="plot_gao2024",
         action="store_true",
-        help="Run plot/plot_Kong&Li2026.py automatically after the simulation and write figures to <output>/_plots_Kong&Li2026.",
+        help="Run plot/plot_Gao+2024.py automatically after the simulation and write figures to <output>/_plots_Gao+2024.",
+    )
+    parser.add_argument(
+        "--plot_KongLi2026a",
+        dest="plot_kongli2026a",
+        action="store_true",
+        help="Run plot/plot_Kong&Li2026a.py automatically after the simulation and write figures to <output>/_plots_Kong&Li2026a.",
+    )
+    parser.add_argument(
+        "--plot_KongLi2026b",
+        dest="plot_kongli2026b",
+        action="store_true",
+        help="Run plot/plot_Kong&Li2026b.py automatically after the simulation and write figures to <output>/_plots_Kong&Li2026b.",
     )
     if any(arg == "--jobs" or arg.startswith("--jobs=") for arg in sys.argv[1:]):
         parser.error("--jobs has been removed; use --main_jobs for different halos and --satellite_jobs for satellite branches")
@@ -2593,7 +2887,9 @@ def main() -> None:
 
     data_dir, tree_dir = _check_project_layout(
         plot_choksi2018_requested=bool(args.plot_choksi2018),
-        plot_kong_li2026_requested=bool(args.plot_kongli2026),
+        plot_gao2024_requested=bool(args.plot_gao2024),
+        plot_kong_li2026a_requested=bool(args.plot_kongli2026a),
+        plot_kong_li2026b_requested=bool(args.plot_kongli2026b),
         tree_dir=args.tree_dir,
     )
 
@@ -2704,7 +3000,8 @@ def main() -> None:
             "fit": fit,
             "Mmin_definition": (
                 "Linear minimum initial GC mass in Msun used for the CIMF lower endpoint "
-                "and the event-budget eligibility check."
+                "and full-draw event sampling. Budgets below this endpoint and terminal "
+                "residuals use an acceptance probability so accepted realised masses remain on the CIMF support."
             ),
             "IMBH_definition": (
                 "Dimensionless coefficient applied once to the selected formation-time IMBH fit result."
@@ -2734,7 +3031,7 @@ def main() -> None:
             "final_gc_stellar_mass_column": "M_GC_final",
             "m_gc_final_total_msun_definition": (
                 "Halo-level surviving GC-system mass, equal to the sum of M_GC_final "
-                "over rows with status == 1 only."
+                "over rows with status == 1 (STAT_ALIVE) only."
             ),
             "M_NSC_definition": (
                 "Cumulative evolved deposited stellar mass sampled from m_star_with_evo_msun inside "
@@ -2753,7 +3050,9 @@ def main() -> None:
             "deposited_mass_bookkeeping": (
                 "depos.dat retains radial stellar mass-loss, stripping, exhaustion, tidal-disruption, "
                 "and fixed 1 pc sink-deposit profiles. The first radial bin is always [0, 1e-3] kpc; "
-                "public M_NSC is sampled from the evolved stellar channel inside NSC_RAD_PC."
+                "satellite branch import sums all three channels in every complete bin whose inner edge is "
+                "below NSC_RAD_PC, including the crossing bin, and places that aggregate in the descendant "
+                "central bin; public M_NSC is sampled from the evolved stellar channel inside NSC_RAD_PC."
             ),
             "haloSummaryByZ_definition": (
                 "Redshift-resolved deposited stellar NSC sample and central BH state. "
@@ -2774,8 +3073,12 @@ def main() -> None:
         plot_outputs: List[Path] = []
         if args.plot_choksi2018:
             plot_outputs.append(_run_plot_product("choksi2018", output_dir=output_dir))
-        if args.plot_kongli2026:
-            plot_outputs.append(_run_plot_product("kongli2026", output_dir=output_dir))
+        if args.plot_kongli2026a:
+            plot_outputs.append(_run_plot_product("kongli2026a", output_dir=output_dir))
+        if args.plot_kongli2026b:
+            plot_outputs.append(_run_plot_product("kongli2026b", output_dir=output_dir))
+        if args.plot_gao2024:
+            plot_outputs.append(_run_plot_product("gao2024", output_dir=output_dir))
 
         elapsed = time.time() - t0
         print(
