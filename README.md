@@ -97,8 +97,8 @@ Future fixed-tree, formation, lookup, summary, and plot-output identifiers are p
 Use a separate output directory for each `--fit` choice; the three example runs below therefore write to three different directories.
 
 ```bash
-python ~/GitHub/src/run.py --help
-nohup python3 /home/subonan/GitHub/src/run.py \
+/home/software/miniconda3/envs/Cha0s/bin/python /home/czkong/GC-BH_Model/src/run.py --help
+nohup /home/software/miniconda3/envs/Cha0s/bin/python /home/czkong/GC-BH_Model/src/run.py \
   --tree-dir /lingshan/disk3/subonan/TNG50+100-1-Dark_Full/fixed_trees \
   --clear-output 2 --output /lingshan/disk3/subonan/_outputs/TNG50_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026 \
   --Eddington 0 --fit "Rantala+2026" --Mmin 1.0e5 --IMBH 1.0 --lg_cut-off_mass 7.0 --N_S 2.0 --p2 7.0 --p3 0.5 --ts-m 0.2 --ts-r 0.2 \
@@ -107,7 +107,7 @@ nohup python3 /home/subonan/GitHub/src/run.py \
   --main_jobs 32 --satellite_jobs 1 --plot_Choksi+2018 --plot_Gao+2024 --plot_KongLi2026a --plot_KongLi2026b \
   > ~/TNG50_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026.log 2>&1 &
 
-nohup python3 /home/subonan/GitHub/src/run.py \
+nohup /home/software/miniconda3/envs/Cha0s/bin/python /home/czkong/GC-BH_Model/src/run.py \
   --tree-dir /lingshan/disk3/subonan/TNG50+100-1-Dark_Full/fixed_trees \
   --clear-output 2 --output /lingshan/disk3/subonan/_outputs/TNG50_Eddington0.3_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026 \
   --Eddington 0.3 --fit "Rantala+2026" --Mmin 1.0e5 --IMBH 1.0 --lg_cut-off_mass 7.0 --N_S 2.0 --p2 7.0 --p3 0.5 --ts-m 0.2 --ts-r 0.2 \
@@ -125,14 +125,14 @@ nohup python3 /home/subonan/GitHub/src/run.py \
   --main_jobs 64 --satellite_jobs 1 --plot_Choksi+2018 --plot_Gao+2024 --plot_KongLi2026a --plot_KongLi2026b \
   > ~/TNG50+100_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026.log 2>&1 &
 
-nohup python3 /home/subonan/GitHub/src/run.py \
+nohup /home/software/miniconda3/envs/Cha0s/bin/python /home/czkong/GC-BH_Model/src/run.py \
   --tree-dir /lingshan/disk3/subonan/TNG50+100-1-Dark_Full/fixed_trees \
-  --clear-output 2 --output /lingshan/disk3/subonan/_outputs/TNG50+100_Eddington0.3_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026 \
+  --clear-output 2 --output /lingshan/disk3/subonan/_outputs/TNG50+100_Eddington0.3_Min1e5_p2-7.0_p3-0.5_Rantala+2026 \
   --Eddington 0.3 --fit "Rantala+2026" --Mmin 1.0e5 --IMBH 1.0 --lg_cut-off_mass 7.0 --N_S 2.0 --p2 7.0 --p3 0.5 --ts-m 0.2 --ts-r 0.2 \
   --run-all 1 --n-halos 32768 --log-mh-min 10.0 --log-mh-max 15.0 \
   --out_z '1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0'\
   --main_jobs 64 --satellite_jobs 1 --plot_Choksi+2018 --plot_Gao+2024 --plot_KongLi2026a --plot_KongLi2026b \
-  > ~/TNG50+100_Eddington0.3_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026.log 2>&1 &
+  > ~/TNG50+100_Eddington0.3_Min1e5_p2-7.0_p3-0.5_Rantala+2026.log 2>&1 &
 ```
 
 Prefer running from the repository root because the project path contains spaces and the `src/run.py` entry point is the least error-prone form.
@@ -159,7 +159,7 @@ Prefer running from the repository root because the project path contains spaces
 python3 /home/subonan/GitHub/plot/plot_Choksi+2018.py --out_dir /lingshan/disk3/subonan/_outputs/TNG50+100_Eddington0.3_ll_Mc7
 python3 /home/subonan/GitHub/plot/plot_Gao+2024.py --out_dir /lingshan/disk3/subonan/_outputs/TNG50_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026
 python3 -u 'plot/plot_Kong&Li2026a.py' --out_dir /lingshan/disk3/subonan/_outputs/TNG50+100_Eddington0.3_Mc7 2>&1 | tee /tmp/plot_KongLi2026a.log
-python3 -u '/home/subonan/GitHub/plot/plot_Kong&Li2026b.py' --out_dir /lingshan/disk3/subonan/_outputs/TNG50_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026 2>&1 | tee /tmp/plot_KongLi2026b.log
+/home/software/miniconda3/envs/Cha0s/bin/python -u '/home/czkong/GC-BH_Model/plot/plot_Kong&Li2026b.py' --out_dir /lingshan/disk3/subonan/_outputs/TNG50_Eddington0_IMBH1_Min1e5_p2-7.0_p3-0.5_Rantala+2026 2>&1 | tee /tmp/plot_KongLi2026b.log
 ```
 
 New style:

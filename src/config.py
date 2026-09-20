@@ -3,6 +3,10 @@
 # ===================== #
 
 from __future__ import annotations # Annotations are not evaluated immediately when the file is imported.
+from colossus.cosmology import cosmology as colossus_cosmology
+colossus_cosmology.setCosmology("planck18")
+from colossus.halo import concentration as colossus_concentration
+from functools import lru_cache
 import math # to be optimized
 import numpy as np
 import scipy
@@ -312,6 +316,22 @@ def CosmicAge2Redshift(t: float, time_unit: str = "Gyr") -> float:
 def v_v(Mhalo: float, z: float) -> float:
     """virial velocity in km/s for halo mass Mhalo in M☉ at redshift z for flat ΛCDM without radiation"""
     return np.sqrt(G_kpc * Mhalo / Rv(Mhalo=Mhalo, z=z))
+
+@lru_cache(maxsize=4096)
+def halo_concn_IshiyamaP2021(Mhalo: float, z: float) -> float:
+    """Ishiyama+2021 median NFW-fit virial concentration for all haloes."""
+    check_finite_positive(Mhalo, name="Halo virial mass in M☉ Mhalo")
+    check_finite_non_negative(z, name="Redshift z")
+
+    c_vir = colossus_concentration.concentration(
+        Mhalo * ReducedH0, # [M☉] --> [M☉/h]
+        "vir",
+        z,
+        model="ishiyama21",
+        c_type="fit",
+        halo_sample="all")
+
+    return check_finite_positive(c_vir, name="Ishiyama+2021 virial concentration c_vir")
 
 # Behroozi+2013 stellar mass-halo mass(SMHM) relation
 

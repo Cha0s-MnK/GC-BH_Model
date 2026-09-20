@@ -302,7 +302,7 @@ GC-origin stellar component. We select GCs that have reached the nuclear
 region before the QSO1 epoch, assign each one an age and its formation
 metallicity, and interpolate a MIST/Chabrier simple-stellar-population table.
 The luminosity-weighted composite magnitude is then scaled by the initially
-formed stellar mass inside $R_{\rm UV}=6~{\rm pc}$,
+formed stellar mass inside $R_{\rm UV}$,
 \begin{align}
 M_{\rm UV}
 &=m_{1500,{\rm comp}}
@@ -311,7 +311,7 @@ M_{\rm UV}
 \end{align}
 This is a pure-stellar estimate. It excludes AGN light, dust attenuation,
 nebular emission, reprocessed radiation, and in-situ young stars. We adopt
-$M_{{\rm UV},{\rm QSO1}}=-15.60$ and define
+$M_{\rm UV, QSO1} = -16.98$ and define
 \begin{align}
 S_{\rm UV}
 &=\frac{M_{\rm UV}-M_{{\rm UV},{\rm QSO1}}}{0.5~{\rm mag}},
@@ -333,13 +333,7 @@ contributions from the active galactic nucleus, reprocessed emission, dust,
 nebular emission, and other non-stellar sources.
 
 For the QSO1 comparison, we use the GC-origin stellar material that has
-reached the nuclear region by the evaluation epoch. The UV aperture is fixed
-at
-\begin{align}
-R_{\rm UV}=6~{\rm pc}.
-\end{align}
-The corresponding stellar mass is the initially formed stellar mass deposited
-within this aperture,
+reached the nuclear region by the evaluation epoch. The UV aperture is from $R_{\rm UV}=6~{\rm pc}$ until 150 pc. The corresponding stellar mass is the initially formed stellar mass deposited within this aperture,
 \begin{align}
 M_{\star,{\rm form}}(<R_{\rm UV})
  =
@@ -355,12 +349,12 @@ For each contributing GC, we assign a stellar-population age
 \begin{align}
 \tau_i=t(z_{\rm eval})-t_{{\rm form},i},
 \end{align}
-where \(t_{{\rm form},i}\) is the formation time of the GC and
-\(z_{\rm eval}\simeq7\) is the model evaluation redshift. The observed source
-redshift is \(z_{\rm QSO1}=7.04\); the model diagnostic is evaluated at the
-nearest available \(z=7\) epoch, while the QSO1 redshift is used for the
+where $t_{{\rm form},i}$ is the formation time of the GC and
+$z_{\rm eval}\simeq7$ is the model evaluation redshift. The observed source
+redshift is $z_{\rm QSO1}=7.04$; the model diagnostic is evaluated at the
+nearest available $z=7$ epoch, while the QSO1 redshift is used for the
 selection and comparison bookkeeping. Each contributor is also assigned its
-formation metallicity \([\mathrm{Fe/H}]_i\).
+formation metallicity $[\mathrm{Fe/H}]_i$.
 
 We convert the age--metallicity distribution into UV luminosity using a
 single-stellar-population calibration,
@@ -371,8 +365,8 @@ m_{1500}\!\left(\tau_i,[\mathrm{Fe/H}]_i\right),
 \end{align}
 tabulated for a MIST stellar-evolution model and a Chabrier initial mass
 function. The tabulated quantity is the absolute AB magnitude at
-\(1500~\mathring{\mathrm{A}}\) per \(1\,M_\odot\) of initially formed stars.
-We interpolate linearly in \(\log_{10}\tau\) and in \([\mathrm{Fe/H}]\). If a
+$1500~\mathring{\mathrm{A}}$ per $1\,M_\odot$ of initially formed stars.
+We interpolate linearly in $\log_{10}\tau$ and in $[\mathrm{Fe/H}]$. If a
 model population lies outside the calibration range, its age or metallicity
 is clipped to the nearest tabulated boundary rather than extrapolated.
 
@@ -388,7 +382,7 @@ q_{\rm comp}
  \frac{\displaystyle\sum_i w_i q_i}
       {\displaystyle\sum_i w_i},
 \end{align}
-where \(w_i\) is the stellar-mass weight of contributor \(i\), chosen to
+where $w_i$ is the stellar-mass weight of contributor $i$, chosen to
 trace its deposited stellar mass in the nuclear component. When a final
 deposited mass is unavailable, the corresponding initially formed mass is
 used. The composite magnitude per unit initially formed mass is therefore
@@ -415,24 +409,7 @@ stellar population. In particular, we do not add AGN continuum emission,
 AGN-reprocessed light, nebular emission, dust corrections, intergalactic
 absorption, X-ray binaries, or stars formed in situ in the nuclear region.
 
-For the QSO1 consistency test, we adopt
-\begin{align}
-M_{{\rm UV},{\rm QSO1}}=-15.60
-\end{align}
-and define the UV residual
-\begin{align}
-S_{\rm UV}
- =
- \frac{M_{\rm UV}-M_{{\rm UV},{\rm QSO1}}}
-      {\sigma_{\rm UV}},
- \qquad
- \sigma_{\rm UV}=0.5~{\rm mag}.
-\label{eq:suv}
-\end{align}
-The UV constraint is used as an independent consistency filter on the compact
-GC-inspiral model. It should therefore be interpreted as a comparison of the
-predicted stellar component with the observed QSO1 UV magnitude, rather than
-as a full fit to the source spectrum.
+The UV constraint is used as an independent consistency filter on the compact GC-inspiral model. It should therefore be interpreted as a comparison of the predicted stellar component with the observed QSO1 UV magnitude, rather than as a full fit to the source spectrum.
 
 \subsection{Gas-phase metallicity comparison}
 \label{subsec:metallicity}
@@ -460,7 +437,7 @@ the modelled iron abundance into an oxygen abundance. Following \citet{Chen&Gned
 \begin{align}
 [{\rm O/Fe}]_i = 0.37 - 0.17[{\rm Fe/H}]_i
 \end{align}
-and \czkong{Ref here.}
+and \citep{Asplund+2021Metal}
 \begin{align}
 12+\log_{10}(\mathrm{O/H})_\odot=8.69.
 \end{align}
@@ -474,27 +451,6 @@ We then define the oxygen abundance relative to solar as
 & = \log_{10}(\mathrm{O/H})_i + 3.31 .
 \label{eq:oh_model}
 \end{align}
-
-For the compact nuclear component, we combine the abundances of the GC
-contributors that have reached the central aperture
-$R_{\rm UV}=6~{\rm pc}$. Using the deposited initially formed stellar mass
-$w_i$ of each contributor as the weight, we calculate the abundance in linear
-oxygen units,
-\begin{align}
-[\mathrm{O/H}]_{\rm nuc}
- =
- \log_{10}\left[
- \frac{\displaystyle\sum_{i\in{\cal C}_{\rm nuc}}
- w_i\,10^{[\mathrm{O/H}]_i}}
- {\displaystyle\sum_{i\in{\cal C}_{\rm nuc}}w_i}
- \right],
-\label{eq:nuclear_oh}
-\end{align}
-where ${\cal C}_{\rm nuc}$ denotes the set of GC-origin contributors within
-the nuclear component. This quantity is interpreted as a mass-weighted
-nuclear oxygen-abundance proxy. It connects the metallicity of the gas from
-which the GCs formed to the present-day gas measured through the QSO1 narrow
-emission lines.
 
 The QSO1 abundance is inferred from the narrow
 [\textsc{Oiii}]$\lambda 5007$/H$\beta$ ratio. Within the central $\lesssim 150~{\rm pc}$, \citet{Maiolino+2026A2744-QSO1} report

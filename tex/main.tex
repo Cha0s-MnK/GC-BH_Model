@@ -127,7 +127,7 @@
 \begin{document}
 \begin{CJK*}{UTF8}{gbsn}
 
-\title{Connecting Intermediate-Mass Black Holes Formed in Proto-Globular Clusters to High Redshift Supermassive Black Hole Seeds}
+\title{Connecting Intermediate-Mass Black Holes Formed in Globular Clusters to High Redshift Supermassive Black Hole Seeds}
 
 %% A significant change from AASTeX v6+ is in the author blocks. Now an email
 %% address is required for each author. This means that each author requires
@@ -301,7 +301,7 @@ where $Q$ denotes $A$, $B$, $C$, $\Sigma_{\rm crit}$, and, for the high-density 
 M_{\bullet, \rm high} & = D (Z) \log_{10} \left( \dfrac{\Sigma_{\rm h}}{M_\odot / {\rm pc}^2} \right) + E (Z) .
 \label{eq:IMBHhigh}
 \end{align}
-Finally, we retain only seeds with $M_\bullet > 100~M_\odot$, since we focus on IMBH formation through runaway collisions in dense star clusters. The assigned IMBH mass is stored with the GC and is not changed by later stellar evolution or tidal effect.
+Finally, we retain only seeds with $M_\bullet \geqslant 100~M_\odot$, since we focus on IMBH formation through runaway collisions in dense star clusters. The assigned IMBH mass is stored with the GC and is not changed by later stellar evolution or tidal effect.
 
 \begin{table}[htbp!] \centering
 (a) Coefficients for $A(Z)$, $B(Z)$, $C(Z)$, and $\Sigma_{\rm crit} (Z)$ \vspace{5pt}
@@ -769,7 +769,8 @@ b & = 2 N_{\rm S} - \dfrac{1}{3} + \dfrac{0.009876}{N_{\rm S}}.
 \end{align}
 The fiducial catalogue uses $N_{\rm S} = 2$ for the calculations presented here. As discussed in \cite{Gao+2024GC}, the $N_{\rm S}$ value does not impact the final profile much. In the analytic background, the effective radius follows the halo-spin scale \citep{Gao+2024GC}
 \begin{align}
-R_{\rm e} = \dfrac{j}{2 \sqrt{G R_{\rm vir} M_{\rm h}}} ,
+R_{\rm e} = \dfrac{j}{2} \sqrt{\dfrac{R_{\rm vir}}{G M_{\rm h}}} ,
+\label{eq:R_e}
 \end{align}
 where $j$ is TNG SubhaloSpin component in unit $({\rm kpc} / h) (\rm km/s)$, a mass-weighted specific angular momentum of the halo. The enclosed-mass fraction is inverted through the regularised incomplete gamma function,
 \begin{align}
@@ -809,7 +810,7 @@ The stellar background mass enclosed by radius $r$ is
 \begin{align}
 M_{\star}(<r) & = M_{\star} P \left[ N_{\rm S} (3 - p), b \left( \dfrac{r}{R_{\rm e}} \right)^{1 / N_{\rm S}} \right].
 \end{align}
-The associated mean background density of the smooth background is
+Note that here the Sersic index is always $N_{\rm S, bg} = 2.2$ matched to observations. This is because this is the observed distribution of stellar profile while the previous one is just a guess of the GC formation position. The associated mean background density of the smooth background is
 \begin{align}
 \rho_{\rm bg} (r) & = \dfrac{3}{4 \pi r^3} \left[ \dfrac{r^2}{G} \left| \dfrac{{\rm d}  \Phi_{\rm NFW}}{{\rm d}  r} \right| + M_\star (< r) \right] .
 \label{eq:rho_bg}

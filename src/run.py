@@ -2761,7 +2761,7 @@ def main() -> None:
         description=("Run the High-z SMBHs Python GC pipeline using the copied new/src and data layout, with an optional fixed-tree directory override."),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         allow_abbrev=False,)
-    parser.add_argument("--output", type=Path, default=Path("/lingshan/disk3/subonan/_outputs/Gao+2024"), help="Output directory.")
+    parser.add_argument("--output", type=Path, default=None, help="Output directory.")
     parser.add_argument("--tree-dir", type=Path, default=None, help="Optional fixed-tree input directory. Defaults to the bundled data/fixed_trees_large_spin in this repository.")
     parser.add_argument(
         "--clear-output",

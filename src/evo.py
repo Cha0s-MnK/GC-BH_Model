@@ -169,20 +169,28 @@ def rho_bkgd(r_kpc: float, SersicReff_kpc: float, Mv_1e9Msun: float, t_Gyr: floa
         )
 
     p, b = Sersic_coefs(2.2)
-    c = 10 ** 0.971 / ((Mv_1e9Msun * ReducedH0 / 1.0e3) ** 0.094) # halo concentration
-    check_finite_positive(c, name="Halo concentration c")
-    Rs = Rv(Mhalo=Mv_1e9Msun*1.0e9, z=CosmicAge2Redshift(t=t_Gyr, time_unit="Gyr")) / c # halo scale radius
-    check_finite_positive(Rs, name="Halo scale radius in kpc Rs")
-    dPhiNFW_dr = G_kpc * Mv_1e9Msun * 1.0e9 / (math.log(1.0 + c) - c / (1.0 + c)) * (math.log(1.0 + r_kpc / Rs) / (r_kpc * r_kpc) - 1.0 / ((Rs + r_kpc) * r_kpc))
+    z    = CosmicAge2Redshift(t=t_Gyr, time_unit="Gyr")
+    Mvir = Mv_1e9Msun * 1.0e9
 
-    Mstar_encl = Mstar_SMHM(Mhalo=Mv_1e9Msun*1.0e9, z=CosmicAge2Redshift(t=t_Gyr, time_unit="Gyr")) * special.gammainc(2.2 * (3.0 - p), b * (r_kpc / SersicReff_kpc) ** (1.0 / 2.2))
+    #c_vir = 10 ** 0.971 / ((Mv_1e9Msun * ReducedH0 / 1.0e3) ** 0.094)
+    c_vir = halo_concn_IshiyamaP2021(Mhalo=Mvir, z=z)
+    check_finite_positive(c_vir, name="Halo virial concentration c_vir")
+    Rs = Rv(Mhalo=Mvir, z=z) / c_vir
+    check_finite_positive(Rs, name="Halo scale radius in kpc Rs")
+    dPhiNFW_dr = G_kpc * Mvir / (math.log(1.0 + c_vir) - c_vir / (1.0 + c_vir)) * (math.log(1.0 + r_kpc / Rs) / (r_kpc * r_kpc) - 1.0 / ((Rs + r_kpc) * r_kpc))
+
+    Mstar_encl = Mstar_SMHM(Mhalo=Mvir, z=z) * special.gammainc(2.2 * (3.0 - p), b * (r_kpc / SersicReff_kpc) ** (1.0 / 2.2))
     return check_finite_positive(3.0 / (4.0 * PI * r_kpc ** 3) * ((r_kpc ** 2) / G_kpc * np.abs(dPhiNFW_dr) + Mstar_encl),
                                  name="Background density in M☉/kpc³ rho_bg")
 
-def swf(t_gyr: float) -> float:
-    t_safe = max(float(t_gyr), 1.0e-12)
-    x = math.log10(t_safe) + 9.0
-    return max(0.0, -(x * x) / 100.0 + 0.288 * x - 1.42)
+def f_SE(t_Gyr: float) -> float:
+    check_finite_non_negative(t_Gyr, name="Cosmic age in Gyr t_Gyr")
+
+    if t_Gyr <= 2.75e-3: # 2.75 Myr
+        return 0.0
+
+    x = math.log10(t_Gyr) + 9.0
+    return max(0.0, - 0.01 * (x * x) + 0.288 * x - 1.42)
 
 def rateStrippingFragioneP2019(M_GC_1e5Msun: float, r_kpc: float, v_kms: float) -> float:
     check_finite_positive(M_GC_1e5Msun, name="GC mass in 1e5 M☉ M_GC_1e5Msun")
@@ -597,34 +605,35 @@ def evolve_single_halo(
         return loss
 
     def age_deposited_stars(
-        i: int,
-        t_target_gyr: float,
-        bound_mass_1e5: float,
+        i: int, # cluster index
+        t_tgt_Gyr: float, # t + \Delta t
+        Mi_1e5Msun: float, # current cluster mass in 1e5 Msun
         sumbin_col2_override: Optional[float] = None,
     ) -> float:
         """Age deposited stars up to ``t_target_gyr`` and return bound stellar wind loss."""
+        check_finite_non_negative(Mi_1e5Msun, "Current cluster mass in 1e5 Msun Mi_1e5Msun")
 
-        if m_gc_init[i] <= 1.0e-2:
-            t_depo_age[i] = min(max(float(t_target_gyr), float(t_depo_age[i])), t_end)
-            return 0.0
-        t_prev = float(t_depo_age[i])
-        t_target = min(max(float(t_target_gyr), t_prev), t_end)
-        if t_target <= t_prev + 1.0e-14:
-            return 0.0
-        delta_swf = swf(t_target - t_gc_init[i]) - swf(t_prev - t_gc_init[i])
+        #if m_gc_init[i] <= 1.0e-2:
+        #    t_depo_age[i] = min(max(float(t_target_gyr), float(t_depo_age[i])), t_end)
+        #    return 0.0
+        t_prev = t_depo_age[i]
+        t_tgt = min(max(t_tgt_Gyr, t_prev), t_end)
+        #if t_target <= t_prev + 1.0e-14:
+        #    return 0.0
+        delta_swf = f_SE(t_tgt - t_gc_init[i]) - f_SE(t_prev - t_gc_init[i])
         depos_col2 = float(m_sumbin_total[i, 2] if sumbin_col2_override is None else sumbin_col2_override)
-        denom = max(float(bound_mass_1e5), 0.0) + depos_col2
+        denom = Mi_1e5Msun + depos_col2
         bound_loss = 0.0
         if denom > 0.0 and delta_swf != 0.0:
             for l in range(tun.binnub):
-                dM_star = m_gc_init[i] * depo[i, l, 2] / denom * delta_swf
+                dM_star = (m_gc_init[i] - m_imbh_init[i]) * depo[i, l, 2] / denom * delta_swf
                 new_val = max(0.0, depo[i, l, 2] - dM_star)
                 removed = depo[i, l, 2] - new_val
                 depo[i, l, 2] = new_val
                 m_sumbin_total[i, 2] -= removed
                 m_sumgc_total[l, 2] -= removed
-            bound_loss = m_gc_init[i] * max(float(bound_mass_1e5), 0.0) / denom * delta_swf
-        t_depo_age[i] = t_target
+            bound_loss = m_gc_init[i] * Mi_1e5Msun / denom * delta_swf
+        t_depo_age[i] = t_tgt
         return bound_loss
 
     def age_inactive_deposits(t_target_gyr: float) -> None:
